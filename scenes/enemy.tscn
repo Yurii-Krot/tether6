@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://dkbpmxwomndbi"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_xrivr"]
+size = Vector2(40, 60)
+
+[node name="Enemy" type="CharacterBody2D" unique_id=355634528]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1091257786]
+shape = SubResource("RectangleShape2D_xrivr")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1491544401]
+custom_minimum_size = Vector2(40, 60)
+custom_maximum_size = Vector2(40, 60)
+offset_left = -20.0
+offset_top = -30.0
+offset_right = 20.0
+offset_bottom = 30.0
+color = Color(0.6755825, 0, 0, 1)

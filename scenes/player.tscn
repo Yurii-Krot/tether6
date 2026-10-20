@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://d3gd58em08r2x"]
+
+[ext_resource type="Script" uid="uid://0u88oudd7ydq" path="res://scripts/player.gd" id="1_3vyb7"]
+
+[node name="Player" type="Node2D" unique_id=1556416161]
+script = ExtResource("1_3vyb7")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=450905754]
+custom_minimum_size = Vector2(60, 30)
+custom_maximum_size = Vector2(60, 30)
+offset_right = 40.0
+offset_bottom = 40.0
+scale = Vector2(1, -1.133)
