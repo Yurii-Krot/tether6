@@ -10,15 +10,15 @@ enum State {
 }
 
 @export var health := 30.0
-@export var speed := 75.0
-@export var stop_distance := 200.0
+@export var speed := 95.0
+@export var stop_distance := 340.0
 @export var attack_interval := 1.6
 @export var attack_damage := 7.0
 @export var is_stationary := false
 @export var use_sniper_laser := false
 
 var state: State = State.ADVANCE
-var _stop_y := 450.0
+var _stop_x := 525.0
 var _attack_timer := 0.0
 var _shot_visual_timer := 0.0
 var _base_color := Color.WHITE
@@ -36,8 +36,8 @@ func _ready() -> void:
 	if body_rect:
 		_base_color = body_rect.color
 
-	var trench_y := _get_trench_y()
-	_stop_y = trench_y - stop_distance + randf_range(-20.0, 20.0)
+	var trench_x := _get_trench_x()
+	_stop_x = trench_x + stop_distance + randf_range(-55.0, 75.0)
 
 	if is_stationary:
 		state = State.ATTACK
@@ -60,14 +60,14 @@ func _physics_process(delta: float) -> void:
 
 
 func _process_advance() -> void:
-	var trench_y := _get_trench_y()
-	var target_y := minf(_stop_y, trench_y - stop_distance + 20.0)
-	if global_position.y >= target_y:
+	var trench_x := _get_trench_x()
+	var target_x := maxf(_stop_x, trench_x + stop_distance - 60.0)
+	if global_position.x <= target_x:
 		velocity = Vector2.ZERO
 		state = State.ATTACK
 		return
 
-	velocity = Vector2.DOWN * speed
+	velocity = Vector2.LEFT * speed
 	move_and_slide()
 
 
@@ -75,23 +75,25 @@ func _process_attack(delta: float) -> void:
 	velocity = Vector2.ZERO
 	_attack_timer -= delta
 
+	var muzzle_pos := global_position + Vector2(-30.0, -2.0)
+
 	if use_sniper_laser and shot_line and _shot_visual_timer <= 0.0:
 		if _attack_timer <= 0.85 and _attack_timer > 0.0:
 			var player := _find_player()
 			if player:
 				shot_line.width = 1.5
-				shot_line.default_color = Color(1.0, 0.15, 0.15, 0.65)
+				shot_line.default_color = Color(1.0, 0.15, 0.15, 0.7)
 				shot_line.clear_points()
-				shot_line.add_point(global_position)
-				shot_line.add_point(player.global_position)
+				shot_line.add_point(muzzle_pos)
+				shot_line.add_point(player.global_position + Vector2(0.0, -8.0))
 				shot_line.visible = true
 
 	if _attack_timer <= 0.0:
 		_attack_timer = attack_interval
-		_perform_attack()
+		_perform_attack(muzzle_pos)
 
 
-func _perform_attack() -> void:
+func _perform_attack(muzzle_pos: Vector2) -> void:
 	var player := _find_player()
 	if player == null:
 		return
@@ -102,10 +104,10 @@ func _perform_attack() -> void:
 	if shot_line:
 		_shot_visual_timer = 0.08
 		shot_line.width = 3.0 if use_sniper_laser else 2.0
-		shot_line.default_color = Color(1.0, 0.85, 0.3, 0.9)
+		shot_line.default_color = Color(1.0, 0.88, 0.35, 0.92)
 		shot_line.clear_points()
-		shot_line.add_point(global_position + Vector2(0.0, 16.0))
-		shot_line.add_point(player.global_position + Vector2(randf_range(-10.0, 10.0), randf_range(-8.0, 8.0)))
+		shot_line.add_point(muzzle_pos)
+		shot_line.add_point(player.global_position + Vector2(randf_range(-8.0, 8.0), randf_range(-14.0, 8.0)))
 		shot_line.visible = true
 
 
@@ -136,8 +138,8 @@ func _enter_dead_state() -> void:
 	if is_inside_tree():
 		var tween := create_tween()
 		tween.set_parallel(true)
-		tween.tween_property(self, "modulate", Color(0.25, 0.05, 0.05, 0.0), 0.2)
-		tween.tween_property(self, "scale", Vector2(0.85, 0.55), 0.2)
+		tween.tween_property(self, "modulate", Color(0.25, 0.05, 0.05, 0.0), 0.22)
+		tween.tween_property(self, "rotation", 1.25, 0.22)
 		tween.chain().tween_callback(queue_free)
 	else:
 		queue_free()
@@ -170,8 +172,8 @@ func _find_player() -> Node2D:
 	return null
 
 
-func _get_trench_y() -> float:
+func _get_trench_x() -> float:
 	var p := _find_player()
 	if p != null:
-		return p.global_position.y
-	return 650.0
+		return minf(p.global_position.x, 260.0)
+	return 185.0

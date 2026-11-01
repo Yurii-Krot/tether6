@@ -9,10 +9,13 @@ signal all_waves_cleared
 @export var sniper_scene: PackedScene = preload("res://scenes/sniper.tscn")
 @export var spawn_interval := 3.2
 @export var delay_between_waves := 3.5
-@export var spawn_x_min := 150.0
-@export var spawn_x_max := 1130.0
-@export var infantry_spawn_y := 45.0
-@export var sniper_spawn_y := 70.0
+@export var infantry_spawn_x := 1295.0
+@export var spawn_y_min := 405.0
+@export var spawn_y_max := 625.0
+@export var sniper_x_min := 820.0
+@export var sniper_x_max := 1150.0
+@export var sniper_y_min := 275.0
+@export var sniper_y_max := 315.0
 @export var auto_start := true
 
 @export var waves: Array[Dictionary] = [
@@ -88,7 +91,7 @@ func _build_wave_queue(wave_data: Dictionary) -> Array[String]:
 	for i in range(infantry_count):
 		queue.append("infantry")
 
-	# Вставляємо снайпера після перших 2 піхотинців (або на початок), щоб тримав гравця під вогнем протягом хвилі
+	# Вставляємо снайпера після перших 2 піхотинців, щоб тримав окоп під прицілом зверху справа
 	for s in range(sniper_count):
 		var insert_idx := mini(2 + s * 3, queue.size())
 		queue.insert(insert_idx, "sniper")
@@ -117,9 +120,15 @@ func _spawn_next_from_queue() -> void:
 		return
 
 	if unit_type == "sniper":
-		unit.global_position = Vector2(randf_range(spawn_x_min + 70.0, spawn_x_max - 70.0), sniper_spawn_y)
+		unit.global_position = Vector2(
+			randf_range(sniper_x_min, sniper_x_max),
+			randf_range(sniper_y_min, sniper_y_max)
+		)
 	else:
-		unit.global_position = Vector2(randf_range(spawn_x_min, spawn_x_max), infantry_spawn_y)
+		unit.global_position = Vector2(
+			infantry_spawn_x,
+			randf_range(spawn_y_min, spawn_y_max)
+		)
 
 	var id := unit.get_instance_id()
 	_alive_enemies[id] = true

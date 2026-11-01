@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://b0j1rpe7d22dc" path="res://scripts/enemy.gd" id="1_enemy"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_xrivr"]
-size = Vector2(40, 60)
+size = Vector2(36, 58)
 
 [node name="Enemy" type="CharacterBody2D" unique_id=355634528]
 collision_mask = 0
@@ -13,29 +13,29 @@ script = ExtResource("1_enemy")
 shape = SubResource("RectangleShape2D_xrivr")
 
 [node name="ColorRect" type="ColorRect" parent="." unique_id=1491544401]
-custom_minimum_size = Vector2(40, 60)
-offset_left = -20.0
-offset_top = -30.0
-offset_right = 20.0
-offset_bottom = 30.0
+custom_minimum_size = Vector2(34, 56)
+offset_left = -17.0
+offset_top = -28.0
+offset_right = 17.0
+offset_bottom = 28.0
 mouse_filter = 2
-color = Color(0.72, 0.12, 0.12, 1)
+color = Color(0.68, 0.16, 0.14, 1)
 
 [node name="Helmet" type="ColorRect" parent="." unique_id=191100201]
-offset_left = -16.0
-offset_top = -28.0
+offset_left = -20.0
+offset_top = -31.0
 offset_right = 16.0
-offset_bottom = -12.0
+offset_bottom = -15.0
 mouse_filter = 2
-color = Color(0.32, 0.12, 0.1, 1)
+color = Color(0.28, 0.12, 0.1, 1)
 
 [node name="Rifle" type="ColorRect" parent="." unique_id=191100202]
-offset_left = 6.0
-offset_top = 0.0
-offset_right = 13.0
-offset_bottom = 38.0
+offset_left = -36.0
+offset_top = -6.0
+offset_right = -4.0
+offset_bottom = 1.0
 mouse_filter = 2
-color = Color(0.16, 0.16, 0.18, 1)
+color = Color(0.14, 0.14, 0.16, 1)
 
 [node name="ShotLine" type="Line2D" parent="." unique_id=191100203]
 top_level = true
