@@ -80,19 +80,38 @@ func _process(delta: float) -> void:
 
 
 func shoot(aim: Vector2) -> void:
+	var space_state := get_world_2d().direct_space_state
 	var origin := weapon_pivot.global_position
 	var dir := (aim - origin).normalized()
 	if dir == Vector2.ZERO:
-		dir = Vector2.UP
+		dir = Vector2.RIGHT
 
 	var ray_end := origin + dir * 2000.0
-	var query := PhysicsRayQueryParameters2D.create(origin, ray_end)
-	var hit := get_world_2d().direct_space_state.intersect_ray(query)
+	var target_collider: Object = null
 
-	if hit:
-		ray_end = hit.position
-		if hit.collider and hit.collider.has_method("take_damage"):
-			hit.collider.take_damage(damage)
+	# Спочатку перевіряємо точне наведення хрестика (як у Peacekeeper)
+	var point_query := PhysicsPointQueryParameters2D.new()
+	point_query.position = aim
+	point_query.collide_with_bodies = true
+	var point_hits := space_state.intersect_point(point_query, 4)
+	for hit_info in point_hits:
+		var col: Object = hit_info.get("collider")
+		if col and col.has_method("take_damage"):
+			target_collider = col
+			ray_end = aim
+			break
+
+	# Якщо під самим курсором ворога немає — пускаємо промінь вздовж лінії пострілу
+	if target_collider == null:
+		var ray_query := PhysicsRayQueryParameters2D.create(origin, ray_end)
+		var ray_hit := space_state.intersect_ray(ray_query)
+		if ray_hit:
+			ray_end = ray_hit.position
+			if ray_hit.collider and ray_hit.collider.has_method("take_damage"):
+				target_collider = ray_hit.collider
+
+	if target_collider != null:
+		target_collider.take_damage(damage)
 
 	_trigger_shot_feedback(ray_end)
 
@@ -115,9 +134,10 @@ func _set_cover(active: bool) -> void:
 	cover_changed.emit(is_in_cover)
 
 	if is_in_cover:
-		body.position = Vector2(-22.0, -8.0)
-		body.scale = Vector2(0.92, 0.68)
-		body.color = Color(0.15, 0.3, 0.48, 0.9)
+		# Присідає глибше в окоп зліва
+		body.position = Vector2(-30.0, -14.0)
+		body.scale = Vector2(0.88, 0.58)
+		body.color = Color(0.16, 0.25, 0.2, 0.9)
 		weapon_pivot.visible = false
 		muzzle_flash.visible = false
 		tracer_line.visible = false
@@ -125,9 +145,9 @@ func _set_cover(active: bool) -> void:
 			reload_sound.pitch_scale = 0.95
 			reload_sound.play()
 	else:
-		body.position = Vector2(-22.0, -18.0)
+		body.position = Vector2(-18.0, -28.0)
 		body.scale = Vector2.ONE
-		body.color = Color(0.24, 0.48, 0.76, 1.0)
+		body.color = Color(0.26, 0.42, 0.34, 1.0)
 		weapon_pivot.visible = true
 
 	_update_hud()
