@@ -1,58 +1,57 @@
-[gd_scene load_steps=4 format=3 uid="uid://d3gd58em08r2x"]
+[gd_scene load_steps=6 format=3 uid="uid://d3gd58em08r2x"]
 
 [ext_resource type="Script" uid="uid://0u88oudd7ydq" path="res://scripts/player.gd" id="1_3vyb7"]
 [ext_resource type="AudioStream" uid="uid://cew2t2m77ulty" path="res://assets/shoot.wav" id="2_shoot"]
 [ext_resource type="AudioStream" uid="uid://ds3g3geq0xip" path="res://assets/reload.wav" id="3_reload"]
+[ext_resource type="Texture2D" path="res://assets/player_spritesheet.png" id="4_player_sheet"]
+[ext_resource type="Texture2D" path="res://assets/player_rifle_sheet.png" id="5_rifle_sheet"]
 
 [node name="Player" type="Node2D" unique_id=1556416161]
 script = ExtResource("1_3vyb7")
 
-[node name="Body" type="ColorRect" parent="." unique_id=450905754]
-offset_left = -18.0
-offset_top = -28.0
-offset_right = 18.0
-offset_bottom = 24.0
-pivot_offset = Vector2(18, 52)
-mouse_filter = 2
-color = Color(0.26, 0.42, 0.34, 1)
+[node name="Shadow" type="Polygon2D" parent="." unique_id=181100100]
+position = Vector2(0, 38)
+color = Color(0, 0, 0, 0.42)
+polygon = PackedVector2Array(-26, 0, -19, -6, 0, -8, 19, -6, 26, 0, 19, 6, 0, 8, -19, 6)
 
-[node name="Helmet" type="ColorRect" parent="Body" unique_id=181100101]
-offset_left = -2.0
-offset_top = -8.0
-offset_right = 40.0
-offset_bottom = 10.0
-mouse_filter = 2
-color = Color(0.18, 0.28, 0.22, 1)
+[node name="Body" type="Sprite2D" parent="." unique_id=450905754]
+scale = Vector2(0.42, 0.42)
+texture = ExtResource("4_player_sheet")
+offset = Vector2(46, -10)
+hframes = 6
+vframes = 4
 
 [node name="WeaponPivot" type="Node2D" parent="." unique_id=181100102]
-position = Vector2(6, -10)
+position = Vector2(-7.5, -5)
 
 [node name="Barrel" type="Node2D" parent="WeaponPivot" unique_id=181100103]
 
-[node name="BarrelRect" type="ColorRect" parent="WeaponPivot/Barrel" unique_id=181100104]
-offset_left = 2.0
-offset_top = -4.0
-offset_right = 42.0
-offset_bottom = 4.0
-mouse_filter = 2
-color = Color(0.16, 0.18, 0.2, 1)
+[node name="WeaponSprite" type="Sprite2D" parent="WeaponPivot/Barrel" unique_id=181100115]
+scale = Vector2(0.42, 0.42)
+texture = ExtResource("5_rifle_sheet")
+offset = Vector2(64, 2)
+hframes = 6
 
 [node name="Muzzle" type="Marker2D" parent="WeaponPivot/Barrel" unique_id=181100105]
-position = Vector2(44, 0)
+position = Vector2(60, 3)
 
 [node name="MuzzleFlash" type="Polygon2D" parent="WeaponPivot/Barrel/Muzzle" unique_id=181100106]
 visible = false
-color = Color(1, 0.92, 0.32, 1)
-polygon = PackedVector2Array(0, -5, 13, -9, 9, -2, 22, 0, 9, 2, 13, 9, 0, 5)
+color = Color(1, 0.78, 0.22, 0.95)
+polygon = PackedVector2Array(0, -6, 16, -12, 11, -3, 28, 0, 11, 3, 16, 12, 0, 6)
+
+[node name="CoreFlash" type="Polygon2D" parent="WeaponPivot/Barrel/Muzzle/MuzzleFlash" unique_id=181100114]
+color = Color(1, 0.98, 0.85, 1)
+polygon = PackedVector2Array(0, -3, 9, -5, 17, 0, 9, 5, 0, 3)
 
 [node name="TracerLine" type="Line2D" parent="." unique_id=181100107]
 top_level = true
 visible = false
-width = 2.0
-default_color = Color(1, 0.95, 0.55, 0.85)
+width = 2.4
+default_color = Color(1, 0.95, 0.55, 0.9)
 
 [node name="HUD" type="Node2D" parent="." unique_id=181100108]
-position = Vector2(0, 32)
+position = Vector2(0, 48)
 
 [node name="HealthBarBg" type="ColorRect" parent="HUD" unique_id=181100109]
 offset_left = -45.0

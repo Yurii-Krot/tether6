@@ -1,9 +1,10 @@
-[gd_scene load_steps=3 format=3 uid="uid://dkbpmxwomndbi"]
+[gd_scene load_steps=4 format=3 uid="uid://dkbpmxwomndbi"]
 
 [ext_resource type="Script" uid="uid://b0j1rpe7d22dc" path="res://scripts/enemy.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/enemy_spritesheet.png" id="2_enemy_sheet"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_xrivr"]
-size = Vector2(36, 58)
+size = Vector2(48, 82)
 
 [node name="Enemy" type="CharacterBody2D" unique_id=355634528]
 collision_mask = 0
@@ -12,30 +13,17 @@ script = ExtResource("1_enemy")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1091257786]
 shape = SubResource("RectangleShape2D_xrivr")
 
-[node name="ColorRect" type="ColorRect" parent="." unique_id=1491544401]
-custom_minimum_size = Vector2(34, 56)
-offset_left = -17.0
-offset_top = -28.0
-offset_right = 17.0
-offset_bottom = 28.0
-mouse_filter = 2
-color = Color(0.68, 0.16, 0.14, 1)
+[node name="Shadow" type="Polygon2D" parent="." unique_id=191100200]
+position = Vector2(0, 38)
+color = Color(0, 0, 0, 0.38)
+polygon = PackedVector2Array(-24, 0, -17, -5, 0, -7, 17, -5, 24, 0, 17, 5, 0, 7, -17, 5)
 
-[node name="Helmet" type="ColorRect" parent="." unique_id=191100201]
-offset_left = -20.0
-offset_top = -31.0
-offset_right = 16.0
-offset_bottom = -15.0
-mouse_filter = 2
-color = Color(0.28, 0.12, 0.1, 1)
-
-[node name="Rifle" type="ColorRect" parent="." unique_id=191100202]
-offset_left = -36.0
-offset_top = -6.0
-offset_right = -4.0
-offset_bottom = 1.0
-mouse_filter = 2
-color = Color(0.14, 0.14, 0.16, 1)
+[node name="BodySprite" type="Sprite2D" parent="." unique_id=1491544401]
+scale = Vector2(0.4, 0.4)
+texture = ExtResource("2_enemy_sheet")
+offset = Vector2(-22, -6)
+hframes = 6
+vframes = 4
 
 [node name="ShotLine" type="Line2D" parent="." unique_id=191100203]
 top_level = true

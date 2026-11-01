@@ -37,14 +37,14 @@ theme_override_font_sizes/font_size = 22
 text = "Підготовка до бою..."
 
 [node name="ControlsHint" type="Label" parent="UI" unique_id=201100406]
-offset_left = 680.0
+offset_left = 600.0
 offset_top = 18.0
 offset_right = 1256.0
 offset_bottom = 48.0
 theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
 theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 15
-text = "ЛКМ — вогонь | W / S (↑ / ↓) — перекат в окопі | Пробіл — укриття"
+text = "ЛКМ — висунутись з окопу й вести вогонь | Відпустити ЛКМ — в окоп (перезарядка) | W / S — кувирок"
 horizontal_alignment = 2
 
 [node name="BannerLabel" type="Label" parent="UI" unique_id=201100407]
