@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3 uid="uid://csniper7tether6"]
+[gd_scene format=3 uid="uid://d02t2d565y3mr"]
 
 [ext_resource type="Script" uid="uid://b0j1rpe7d22dc" path="res://scripts/enemy.gd" id="1_enemy"]
 

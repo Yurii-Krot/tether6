@@ -4,6 +4,8 @@ signal died
 signal health_changed(current_health: float, max_health: float)
 signal ammo_changed(current_ammo: int, magazine_size: int)
 signal cover_changed(in_cover: bool)
+signal roll_started(direction: float)
+signal roll_finished
 
 const CROSSHAIR_TEXTURE := preload("res://assets/crosshair.png")
 
@@ -15,16 +17,30 @@ const CROSSHAIR_TEXTURE := preload("res://assets/crosshair.png")
 @export var recoil_distance := 7.0
 @export var recoil_recovery_speed := 45.0
 
+@export_group("Trench Roll")
+@export var trench_min_y := 425.0
+@export var trench_max_y := 630.0
+@export var roll_distance := 95.0
+@export var roll_duration := 0.22
+@export var roll_cooldown := 0.08
+
 var ammo := 30
 var health := 100.0
 var cooldown := 0.0
 var is_in_cover := false
+var is_rolling := false
 var is_dead := false
 
 var _reload_accumulator := 0.0
 var _flash_timer := 0.0
 var _recoil_offset := 0.0
 var _recoil_angle := 0.0
+var _roll_elapsed := 0.0
+var _roll_cooldown_timer := 0.0
+var _roll_start_y := 535.0
+var _roll_target_y := 535.0
+var _roll_dir := 0.0
+var _afterimage_timer := 0.0
 
 @onready var body: ColorRect = $Body
 @onready var weapon_pivot: Node2D = $WeaponPivot
@@ -44,6 +60,7 @@ func _ready() -> void:
 
 	ammo = magazine_size
 	health = max_health
+	position.y = clampf(position.y, trench_min_y, trench_max_y)
 
 	if DisplayServer.get_name() != "headless":
 		Input.set_custom_mouse_cursor(CROSSHAIR_TEXTURE, Input.CURSOR_ARROW, Vector2(16, 16))
@@ -57,11 +74,18 @@ func _process(delta: float) -> void:
 	if is_dead:
 		return
 
+	_roll_cooldown_timer = maxf(_roll_cooldown_timer - delta, 0.0)
+
+	if is_rolling:
+		_process_roll(delta)
+	else:
+		_handle_roll_input()
+
 	var mouse_pos := get_global_mouse_position()
 	weapon_pivot.look_at(mouse_pos)
 	weapon_pivot.rotation += _recoil_angle
 
-	var wants_cover := Input.is_action_pressed("cover")
+	var wants_cover := Input.is_action_pressed("cover") and not is_rolling
 	if wants_cover != is_in_cover:
 		_set_cover(wants_cover)
 
@@ -117,7 +141,7 @@ func shoot(aim: Vector2) -> void:
 
 
 func take_damage(amount: float) -> void:
-	if is_dead or is_in_cover or amount <= 0.0:
+	if is_dead or is_in_cover or is_rolling or amount <= 0.0:
 		return
 
 	health = maxf(health - amount, 0.0)
@@ -129,12 +153,112 @@ func take_damage(amount: float) -> void:
 		_die()
 
 
+func _handle_roll_input() -> void:
+	if _roll_cooldown_timer > 0.0:
+		return
+
+	var dir := 0.0
+	if Input.is_action_just_pressed("roll_up"):
+		dir = -1.0
+	elif Input.is_action_just_pressed("roll_down"):
+		dir = 1.0
+	else:
+		dir = Input.get_axis("roll_up", "roll_down")
+
+	if is_zero_approx(dir):
+		return
+
+	var sign_dir := -1.0 if dir < 0.0 else 1.0
+	var target_y := clampf(position.y + sign_dir * roll_distance, trench_min_y, trench_max_y)
+	if absf(target_y - position.y) < 4.0:
+		return
+
+	_start_roll(sign_dir, target_y)
+
+
+func _start_roll(direction: float, target_y: float) -> void:
+	if is_in_cover:
+		_set_cover(false)
+
+	is_rolling = true
+	_roll_dir = direction
+	_roll_elapsed = 0.0
+	_afterimage_timer = 0.0
+	_roll_start_y = position.y
+	_roll_target_y = target_y
+
+	# Центруємо pivot для красивого сальто/перекату в окопі
+	body.pivot_offset = Vector2(18.0, 26.0)
+	body.position = Vector2(-18.0, -28.0)
+	_spawn_roll_afterimage()
+	roll_started.emit(direction)
+	_update_hud()
+
+
+func _process_roll(delta: float) -> void:
+	_roll_elapsed += delta
+	var duration := maxf(roll_duration, 0.05)
+	var t := clampf(_roll_elapsed / duration, 0.0, 1.0)
+	var eased := 1.0 - pow(1.0 - t, 2.2)
+
+	position.y = lerpf(_roll_start_y, _roll_target_y, eased)
+
+	# Повний оберт у напрямку перекату + легке групування тіла
+	body.rotation = _roll_dir * TAU * t
+	var tuck := sin(t * PI)
+	body.scale = Vector2(1.0 - 0.18 * tuck, 1.0 - 0.24 * tuck)
+
+	_afterimage_timer -= delta
+	if _afterimage_timer <= 0.0 and t < 0.9:
+		_afterimage_timer = 0.045
+		_spawn_roll_afterimage()
+
+	if t >= 1.0:
+		_finish_roll()
+
+
+func _finish_roll() -> void:
+	is_rolling = false
+	position.y = _roll_target_y
+	_roll_cooldown_timer = roll_cooldown
+	body.rotation = 0.0
+	body.pivot_offset = Vector2(18.0, 52.0)
+	body.scale = Vector2.ONE
+	body.position = Vector2(-18.0, -28.0)
+	roll_finished.emit()
+	_update_hud()
+
+
+func _spawn_roll_afterimage() -> void:
+	var parent_node := get_parent()
+	if parent_node == null:
+		return
+
+	# Шлейф перекату в стилі Peacekeeper (жовто-золотавий силует, що швидко згасає)
+	var ghost := ColorRect.new()
+	ghost.size = body.size
+	ghost.pivot_offset = Vector2(18.0, 26.0)
+	ghost.global_position = global_position + body.position
+	ghost.rotation = body.rotation
+	ghost.scale = body.scale
+	ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ghost.color = Color(0.95, 0.82, 0.28, 0.55)
+	ghost.z_index = -1
+	parent_node.add_child(ghost)
+
+	var tween := ghost.create_tween()
+	tween.tween_property(ghost, "modulate:a", 0.0, 0.16)
+	tween.tween_callback(ghost.queue_free)
+
+
 func _set_cover(active: bool) -> void:
 	is_in_cover = active
 	cover_changed.emit(is_in_cover)
 
 	if is_in_cover:
 		# Присідає глибше в окоп зліва
+		body.rotation = 0.0
+		body.pivot_offset = Vector2(18.0, 52.0)
 		body.position = Vector2(-30.0, -14.0)
 		body.scale = Vector2(0.88, 0.58)
 		body.color = Color(0.16, 0.25, 0.2, 0.9)
@@ -145,6 +269,8 @@ func _set_cover(active: bool) -> void:
 			reload_sound.pitch_scale = 0.95
 			reload_sound.play()
 	else:
+		body.rotation = 0.0
+		body.pivot_offset = Vector2(18.0, 52.0)
 		body.position = Vector2(-18.0, -28.0)
 		body.scale = Vector2.ONE
 		body.color = Color(0.26, 0.42, 0.34, 1.0)
@@ -226,6 +352,8 @@ func _update_hud() -> void:
 
 	if is_dead:
 		status_label.text = "ЗАГИНУВ"
+	elif is_rolling:
+		status_label.text = "[ПЕРЕКАТ] Патрони: %d/%d" % [ammo, magazine_size]
 	elif is_in_cover:
 		if ammo < magazine_size:
 			status_label.text = "[УКРИТТЯ] Перезарядка: %d/%d" % [ammo, magazine_size]
@@ -243,3 +371,17 @@ func _ensure_input_actions() -> void:
 		var ev := InputEventKey.new()
 		ev.physical_keycode = KEY_SPACE
 		InputMap.action_add_event("cover", ev)
+
+	if not InputMap.has_action("roll_up"):
+		InputMap.add_action("roll_up")
+		for key in [KEY_W, KEY_UP]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = key
+			InputMap.action_add_event("roll_up", ev)
+
+	if not InputMap.has_action("roll_down"):
+		InputMap.add_action("roll_down")
+		for key in [KEY_S, KEY_DOWN]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = key
+			InputMap.action_add_event("roll_down", ev)
