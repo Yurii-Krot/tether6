@@ -1,23 +1,225 @@
 extends Node2D
 
+signal died
+signal health_changed(current_health: float, max_health: float)
+signal ammo_changed(current_ammo: int, magazine_size: int)
+signal cover_changed(in_cover: bool)
+
+const CROSSHAIR_TEXTURE := preload("res://assets/crosshair.png")
+
 @export var damage := 10.0
-@export var fire_rate := 8.0
+@export var fire_rate := 10.0 # 0.1 с між пострілами
 @export var magazine_size := 30
+@export var reload_time := 1.5
+@export var max_health := 100.0
+@export var recoil_distance := 7.0
+@export var recoil_recovery_speed := 45.0
 
 var ammo := 30
+var health := 100.0
 var cooldown := 0.0
+var is_in_cover := false
+var is_dead := false
+
+var _reload_accumulator := 0.0
+var _flash_timer := 0.0
+var _recoil_offset := 0.0
+var _recoil_angle := 0.0
+
+@onready var body: ColorRect = $Body
+@onready var weapon_pivot: Node2D = $WeaponPivot
+@onready var barrel: Node2D = $WeaponPivot/Barrel
+@onready var muzzle: Marker2D = $WeaponPivot/Barrel/Muzzle
+@onready var muzzle_flash: Polygon2D = $WeaponPivot/Barrel/Muzzle/MuzzleFlash
+@onready var tracer_line: Line2D = $TracerLine
+@onready var health_bar_fill: ColorRect = $HUD/HealthBarFill
+@onready var status_label: Label = $HUD/StatusLabel
+@onready var shot_sound: AudioStreamPlayer = $ShotSound
+@onready var reload_sound: AudioStreamPlayer = $ReloadSound
+
+
+func _ready() -> void:
+	add_to_group("player")
+	_ensure_input_actions()
+
+	ammo = magazine_size
+	health = max_health
+
+	if DisplayServer.get_name() != "headless":
+		Input.set_custom_mouse_cursor(CROSSHAIR_TEXTURE, Input.CURSOR_ARROW, Vector2(16, 16))
+
+	_update_hud()
+
 
 func _process(delta: float) -> void:
-	cooldown -= delta
-	if Input.is_action_pressed("shoot") and cooldown <= 0.0 and ammo > 0:
-		ammo -= 1
-		cooldown = 1.0 / fire_rate
-		shoot(get_global_mouse_position())
-		print("Патрони: ", ammo)
+	_update_shot_effects(delta)
+
+	if is_dead:
+		return
+
+	var mouse_pos := get_global_mouse_position()
+	weapon_pivot.look_at(mouse_pos)
+	weapon_pivot.rotation += _recoil_angle
+
+	var wants_cover := Input.is_action_pressed("cover")
+	if wants_cover != is_in_cover:
+		_set_cover(wants_cover)
+
+	cooldown = maxf(cooldown - delta, 0.0)
+
+	if is_in_cover:
+		_process_reload_in_cover(delta)
+	else:
+		_reload_accumulator = 0.0
+		if Input.is_action_pressed("shoot") and cooldown <= 0.0 and ammo > 0:
+			ammo -= 1
+			cooldown = 1.0 / fire_rate
+			shoot(mouse_pos)
+			ammo_changed.emit(ammo, magazine_size)
+			_update_hud()
+
 
 func shoot(aim: Vector2) -> void:
-	var dir := (aim - global_position).normalized()
-	var query := PhysicsRayQueryParameters2D.create(global_position, global_position + dir * 2000.0)
+	var origin := weapon_pivot.global_position
+	var dir := (aim - origin).normalized()
+	if dir == Vector2.ZERO:
+		dir = Vector2.UP
+
+	var ray_end := origin + dir * 2000.0
+	var query := PhysicsRayQueryParameters2D.create(origin, ray_end)
 	var hit := get_world_2d().direct_space_state.intersect_ray(query)
-	if hit and hit.collider.has_method("take_damage"):
-		hit.collider.take_damage(damage)
+
+	if hit:
+		ray_end = hit.position
+		if hit.collider and hit.collider.has_method("take_damage"):
+			hit.collider.take_damage(damage)
+
+	_trigger_shot_feedback(ray_end)
+
+
+func take_damage(amount: float) -> void:
+	if is_dead or is_in_cover or amount <= 0.0:
+		return
+
+	health = maxf(health - amount, 0.0)
+	health_changed.emit(health, max_health)
+	_update_hud()
+	_flash_damage()
+
+	if health <= 0.0:
+		_die()
+
+
+func _set_cover(active: bool) -> void:
+	is_in_cover = active
+	cover_changed.emit(is_in_cover)
+
+	if is_in_cover:
+		body.position = Vector2(-22.0, -8.0)
+		body.scale = Vector2(0.92, 0.68)
+		body.color = Color(0.15, 0.3, 0.48, 0.9)
+		weapon_pivot.visible = false
+		muzzle_flash.visible = false
+		tracer_line.visible = false
+		if ammo < magazine_size:
+			reload_sound.pitch_scale = 0.95
+			reload_sound.play()
+	else:
+		body.position = Vector2(-22.0, -18.0)
+		body.scale = Vector2.ONE
+		body.color = Color(0.24, 0.48, 0.76, 1.0)
+		weapon_pivot.visible = true
+
+	_update_hud()
+
+
+func _process_reload_in_cover(delta: float) -> void:
+	if ammo >= magazine_size:
+		return
+
+	var bullets_per_sec := float(magazine_size) / maxf(reload_time, 0.05)
+	_reload_accumulator += delta * bullets_per_sec
+	var added := int(_reload_accumulator)
+	if added > 0:
+		_reload_accumulator -= float(added)
+		ammo = mini(ammo + added, magazine_size)
+		ammo_changed.emit(ammo, magazine_size)
+		if ammo == magazine_size:
+			_reload_accumulator = 0.0
+			reload_sound.pitch_scale = 1.12
+			reload_sound.play()
+		_update_hud()
+
+
+func _trigger_shot_feedback(target_point: Vector2) -> void:
+	# Спалах
+	_flash_timer = 0.045
+	muzzle_flash.visible = true
+	muzzle_flash.scale = Vector2(randf_range(0.85, 1.25), randf_range(0.85, 1.2))
+	tracer_line.clear_points()
+	tracer_line.add_point(muzzle.global_position)
+	tracer_line.add_point(target_point)
+	tracer_line.visible = true
+
+	# Звук
+	shot_sound.pitch_scale = randf_range(0.95, 1.06)
+	shot_sound.play()
+
+	# Невеликий відбій
+	_recoil_offset = recoil_distance
+	_recoil_angle = randf_range(-0.045, 0.045)
+	barrel.position.x = -_recoil_offset
+
+
+func _update_shot_effects(delta: float) -> void:
+	if _flash_timer > 0.0:
+		_flash_timer -= delta
+		if _flash_timer <= 0.0:
+			muzzle_flash.visible = false
+			tracer_line.visible = false
+
+	_recoil_offset = move_toward(_recoil_offset, 0.0, recoil_recovery_speed * delta)
+	_recoil_angle = move_toward(_recoil_angle, 0.0, 0.45 * delta)
+	barrel.position.x = -_recoil_offset
+
+
+func _flash_damage() -> void:
+	body.modulate = Color(1.8, 0.45, 0.45, 1.0)
+	var tween := create_tween()
+	tween.tween_property(body, "modulate", Color.WHITE, 0.15)
+
+
+func _die() -> void:
+	is_dead = true
+	weapon_pivot.visible = false
+	muzzle_flash.visible = false
+	tracer_line.visible = false
+	body.color = Color(0.35, 0.1, 0.1, 0.85)
+	_update_hud()
+	died.emit()
+
+
+func _update_hud() -> void:
+	var hp_ratio := clampf(health / maxf(max_health, 1.0), 0.0, 1.0)
+	health_bar_fill.size.x = 90.0 * hp_ratio
+	health_bar_fill.color = Color(0.22, 0.82, 0.32, 1.0).lerp(Color(0.9, 0.2, 0.2, 1.0), 1.0 - hp_ratio)
+
+	if is_dead:
+		status_label.text = "ЗАГИНУВ"
+	elif is_in_cover:
+		if ammo < magazine_size:
+			status_label.text = "[УКРИТТЯ] Перезарядка: %d/%d" % [ammo, magazine_size]
+		else:
+			status_label.text = "[УКРИТТЯ] Повний: %d/%d" % [ammo, magazine_size]
+	elif ammo == 0:
+		status_label.text = "ПОРОЖНЬО! [Пробіл — укриття]"
+	else:
+		status_label.text = "Патрони: %d/%d" % [ammo, magazine_size]
+
+
+func _ensure_input_actions() -> void:
+	if not InputMap.has_action("cover"):
+		InputMap.add_action("cover")
+		var ev := InputEventKey.new()
+		ev.physical_keycode = KEY_SPACE
+		InputMap.action_add_event("cover", ev)
