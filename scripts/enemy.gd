@@ -42,6 +42,7 @@ var _death_anim_timer := 0.0
 var _death_anim_duration := 0.48
 var _blood_splashed := false
 var _base_sprite_scale := Vector2(0.4, 0.4)
+var _last_step_col := -1
 
 @onready var collision_shape: CollisionShape2D = $CollisionShape2D
 @onready var body_sprite: Sprite2D = get_node_or_null("BodySprite")
@@ -99,16 +100,19 @@ func _update_sprite_animation(delta: float) -> void:
 	if body_sprite == null:
 		return
 
+	var cols := maxi(body_sprite.hframes, 1)
+
 	if state == State.DEAD:
 		_death_anim_timer = minf(_death_anim_timer + delta, _death_anim_duration)
 		var raw_t := clampf(_death_anim_timer / _death_anim_duration, 0.0, 1.0)
 		# Прискорення під вагою власного тіла (спочатку підгинаються коліна, потім важке падіння спиною об землю)
 		var gravity_t := pow(raw_t, 1.65)
-		var d_col := clampi(int(gravity_t * float(ANIM_COLS)), 0, ANIM_COLS - 1)
+		var d_col := clampi(int(gravity_t * float(cols)), 0, cols - 1)
 		body_sprite.frame_coords = Vector2i(d_col, ENEMY_ROW_DEATH)
 
-		# У момент удару тілом об землю (кадр 3) — важкий "гуп" (squash) і бризки крові врізнобіч!
-		if d_col >= 3 and not _blood_splashed:
+		# У момент удару тілом об землю (половина анімації) — важкий "гуп" (squash) і бризки крові врізнобіч!
+		var impact_frame := maxi(cols / 2, 3)
+		if d_col >= impact_frame and not _blood_splashed:
 			_blood_splashed = true
 			_spawn_ground_blood_splatter()
 			var impact_tween := create_tween()
@@ -123,33 +127,47 @@ func _update_sprite_animation(delta: float) -> void:
 	if _hurt_anim_timer > 0.0:
 		_hurt_anim_timer = maxf(_hurt_anim_timer - delta, 0.0)
 		var h_prog := 1.0 - (_hurt_anim_timer / _hurt_anim_duration)
-		var h_col := clampi(int(h_prog * float(ANIM_COLS)), 0, ANIM_COLS - 1)
+		var h_col := clampi(int(h_prog * float(cols)), 0, cols - 1)
 		body_sprite.frame_coords = Vector2i(h_col, ENEMY_ROW_HURT)
 		return
 
 	if _shoot_anim_timer > 0.0:
 		_shoot_anim_timer = maxf(_shoot_anim_timer - delta, 0.0)
 		var s_prog := 1.0 - (_shoot_anim_timer / _shoot_anim_duration)
-		var s_col := clampi(int(s_prog * float(ANIM_COLS)), 0, ANIM_COLS - 1)
+		var s_col := clampi(int(s_prog * float(cols)), 0, cols - 1)
 		body_sprite.frame_coords = Vector2i(s_col, ENEMY_ROW_SHOOT)
 		return
 
 	if state == State.ADVANCE:
-		# Рядок 0: 6-кадрова анімація ходьби / наступу
-		var walk_col := int(_anim_time * 9.5) % ANIM_COLS
+		# Рядок 0: плавна 12-кадрова ІК-анімація ходьби (два повних кроки за цикл)
+		var walk_fps := 14.5 if cols >= 12 else 9.5
+		var walk_col := int(_anim_time * walk_fps) % cols
 		body_sprite.frame_coords = Vector2i(walk_col, ENEMY_ROW_WALK)
+
+		# Динаміка тіні та пилу під черевиками на кожному кроці
+		var cycle_phase := (_anim_time * walk_fps / float(cols)) * TAU
+		if shadow:
+			var stride_width := cos(cycle_phase * 2.0)
+			shadow.scale = Vector2(1.0 + 0.12 * stride_width, 1.0 - 0.05 * stride_width)
+
+		if walk_col != _last_step_col:
+			_last_step_col = walk_col
+			if walk_col == 0 or walk_col == (cols / 2):
+				_spawn_step_dust(walk_col == 0)
 	elif use_sniper_laser:
 		# Для снайпера Рядок 0 — це прицілювання в оптику та розгоряння червоного бліку прицілу перед пострілом!
 		if _attack_timer <= 0.85 and _attack_timer > 0.0:
 			var aim_prog := clampf(1.0 - (_attack_timer / 0.85), 0.0, 1.0)
-			var aim_col := clampi(1 + int(aim_prog * 5.0), 1, 5)
+			var aim_col := clampi(1 + int(aim_prog * float(cols - 1)), 1, cols - 1)
 			body_sprite.frame_coords = Vector2i(aim_col, ENEMY_ROW_WALK)
 		else:
 			var breathe_col := int(_anim_time * 2.5) % 2
 			body_sprite.frame_coords = Vector2i(breathe_col, ENEMY_ROW_WALK)
 	else:
 		# У режимі атаки між пострілами тримає бойову стійку з легким диханням
-		var ready_col := 4 + (int(_anim_time * 3.5) % 2)
+		if shadow:
+			shadow.scale = Vector2.ONE
+		var ready_col := (cols - 2) + (int(_anim_time * 3.5) % 2)
 		body_sprite.frame_coords = Vector2i(ready_col, ENEMY_ROW_SHOOT)
 
 
@@ -223,6 +241,35 @@ func _perform_attack(muzzle_pos: Vector2) -> void:
 			true
 		)
 		parent_node.add_child(proj)
+
+
+func _spawn_step_dust(is_near_foot: bool) -> void:
+	var parent_node := get_parent()
+	if parent_node == null:
+		return
+
+	var foot_offset := Vector2(-12.0, 36.0) if is_near_foot else Vector2(-16.0, 34.0)
+	for i in range(2):
+		var puff := Polygon2D.new()
+		puff.color = Color(0.58, 0.49, 0.38, 0.48)
+		var r := randf_range(2.6, 4.2)
+		puff.polygon = PackedVector2Array([
+			Vector2(-r, -r * 0.6),
+			Vector2(r * 0.7, -r),
+			Vector2(r, r * 0.5),
+			Vector2(-r * 0.6, r),
+		])
+		puff.global_position = global_position + foot_offset + Vector2(randf_range(-4.0, 4.0), randf_range(-2.0, 2.0))
+		puff.z_index = -1
+		parent_node.add_child(puff)
+
+		var target := puff.global_position + Vector2(randf_range(8.0, 18.0), randf_range(-10.0, -3.0))
+		var tween := puff.create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(puff, "global_position", target, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(puff, "scale", Vector2(1.4, 1.4), 0.22)
+		tween.tween_property(puff, "modulate:a", 0.0, 0.22)
+		tween.chain().tween_callback(puff.queue_free)
 
 
 func _spawn_enemy_shell() -> void:

@@ -23,7 +23,7 @@ polygon = PackedVector2Array(-24, 0, -17, -5, 0, -7, 17, -5, 24, 0, 17, 5, 0, 7,
 scale = Vector2(0.4, 0.4)
 texture = ExtResource("2_enemy_sheet")
 offset = Vector2(-22, -6)
-hframes = 6
+hframes = 12
 vframes = 4
 
 [node name="ShotLine" type="Line2D" parent="." unique_id=191100203]
