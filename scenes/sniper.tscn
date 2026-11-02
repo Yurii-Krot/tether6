@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3 uid="uid://d02t2d565y3mr"]
+[gd_scene load_steps=5 format=3 uid="uid://d02t2d565y3mr"]
 
 [ext_resource type="Script" uid="uid://b0j1rpe7d22dc" path="res://scripts/enemy.gd" id="1_enemy"]
 [ext_resource type="Texture2D" path="res://assets/sniper_spritesheet.png" id="2_sniper_sheet"]
+[ext_resource type="AudioStream" path="res://assets/sniper_shoot.wav" id="3_sniper_shoot"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_sniper"]
 size = Vector2(46, 78)
@@ -37,3 +38,8 @@ top_level = true
 visible = false
 width = 1.5
 default_color = Color(1, 0.15, 0.15, 0.7)
+
+[node name="ShotSound" type="AudioStreamPlayer" parent="." unique_id=191200309]
+stream = ExtResource("3_sniper_shoot")
+volume_db = -1.5
+max_polyphony = 2

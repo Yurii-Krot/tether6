@@ -45,7 +45,7 @@ func setup(
 	if has_ground_stop and dist > 20.0:
 		max_distance = dist
 	else:
-		max_distance = 1700.0
+		max_distance = 2600.0
 
 	if p_speed > 0.0:
 		speed = p_speed
@@ -104,7 +104,7 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 		return
 
-	if global_position.x < -120.0 or global_position.x > 1450.0 or global_position.y < -120.0 or global_position.y > 880.0:
+	if global_position.x < -80.0 or global_position.x > 1360.0 or global_position.y < -80.0 or global_position.y > 800.0:
 		queue_free()
 
 
@@ -125,21 +125,29 @@ func _check_player_bullet_hit(from_pos: Vector2, to_pos: Vector2) -> bool:
 			queue_free()
 			return true
 
-	# 2. Якщо куля долетіла до точки прицілювання — перевіряємо точкове влучання під перехрестям
-	var next_traveled := _traveled + from_pos.distance_to(to_pos)
-	if has_ground_stop and next_traveled >= max_distance:
-		var point_query := PhysicsPointQueryParameters2D.new()
-		point_query.position = target_point
-		point_query.collide_with_bodies = true
-		point_query.collision_mask = 1
-		var point_hits := space_state.intersect_point(point_query, 4)
-		for hit_info in point_hits:
-			var col: Object = hit_info.get("collider")
-			if col and col.has_method("take_damage"):
-				col.take_damage(damage)
-				_spawn_impact_sparks(target_point, true)
-				queue_free()
-				return true
+	# 2. Перевірка по хітбоксах усіх живих ворогів уздовж відрізка польоту кулі (щоб куля гарантовано вражала першого ворога на своєму шляху)
+	var best_enemy: Node2D = null
+	var best_dist_sq := INF
+	var best_hit_pos := to_pos
+
+	for node in get_tree().get_nodes_in_group("enemies"):
+		var enemy := node as Node2D
+		if enemy == null or enemy.get("state") == 2: # State.DEAD == 2
+			continue
+		var enemy_center := enemy.global_position
+		var closest := Geometry2D.get_closest_point_to_segment(enemy_center, from_pos, to_pos)
+		if absf(closest.x - enemy_center.x) <= 26.0 and absf(closest.y - enemy_center.y) <= 42.0:
+			var d_sq := from_pos.distance_squared_to(closest)
+			if d_sq < best_dist_sq:
+				best_dist_sq = d_sq
+				best_enemy = enemy
+				best_hit_pos = closest
+
+	if best_enemy != null and best_enemy.has_method("take_damage"):
+		best_enemy.take_damage(damage)
+		_spawn_impact_sparks(best_hit_pos, true)
+		queue_free()
+		return true
 
 	return false
 

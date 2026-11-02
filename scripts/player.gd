@@ -229,14 +229,13 @@ func shoot(aim: Vector2) -> void:
 	var parent_node := get_parent()
 	if parent_node != null:
 		var proj := Projectile.new()
-		var stop_on_ground := target_pos.distance_to(origin) > 110.0
 		proj.setup(
 			Projectile.BulletType.PLAYER_YELLOW,
 			origin,
 			target_pos,
 			damage,
 			bullet_speed,
-			stop_on_ground
+			false
 		)
 		parent_node.add_child(proj)
 

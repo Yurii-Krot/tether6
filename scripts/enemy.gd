@@ -21,6 +21,10 @@ const ENEMY_ROW_DEATH := 3
 @export var attack_interval := 1.6
 @export var attack_damage := 7.0
 @export var projectile_speed := 540.0
+@export var burst_count := 1
+@export var burst_interval := 0.12
+@export var shoot_straight := false
+@export var use_red_bullet := false
 @export var is_stationary := false
 @export var use_sniper_laser := false
 
@@ -43,12 +47,15 @@ var _death_anim_duration := 0.48
 var _blood_splashed := false
 var _base_sprite_scale := Vector2(0.4, 0.4)
 var _last_step_col := -1
+var _burst_shots_remaining := 0
+var _burst_timer := 0.0
 
 @onready var collision_shape: CollisionShape2D = $CollisionShape2D
 @onready var body_sprite: Sprite2D = get_node_or_null("BodySprite")
 @onready var body_rect: ColorRect = get_node_or_null("ColorRect")
 @onready var shadow: Polygon2D = get_node_or_null("Shadow")
 @onready var shot_line: Line2D = get_node_or_null("ShotLine")
+@onready var shot_sound: AudioStreamPlayer = get_node_or_null("ShotSound")
 
 
 func _ready() -> void:
@@ -185,15 +192,32 @@ func _process_advance() -> void:
 
 func _process_attack(delta: float) -> void:
 	velocity = Vector2.ZERO
-	_attack_timer -= delta
 
 	var muzzle_offset := Vector2(-30.0, -2.0)
 	if body_sprite != null:
-		muzzle_offset = Vector2(-75.0, -5.5) if use_sniper_laser else Vector2(-49.0, 0.0)
+		if use_sniper_laser:
+			muzzle_offset = Vector2(-75.0, -5.5)
+		elif shoot_straight or burst_count > 1:
+			muzzle_offset = Vector2(-68.0, -6.0)
+		else:
+			muzzle_offset = Vector2(-49.0, 0.0)
 	var muzzle_pos := global_position + muzzle_offset
+
+	# Якщо триває черга пострілів (наприклад, 8 куль поспіль у кулеметника)
+	if _burst_shots_remaining > 0:
+		_burst_timer -= delta
+		if _burst_timer <= 0.0:
+			_burst_shots_remaining -= 1
+			_burst_timer = burst_interval
+			_perform_attack(muzzle_pos)
+			if _burst_shots_remaining == 0:
+				_attack_timer = attack_interval
+		return
+
+	_attack_timer -= delta
 	var lock_window := 0.85 if use_sniper_laser else 0.38
 
-	if _attack_timer <= lock_window and _attack_timer > 0.0 and not _has_locked_aim:
+	if not shoot_straight and _attack_timer <= lock_window and _attack_timer > 0.0 and not _has_locked_aim:
 		var p := _find_player()
 		if p:
 			_locked_aim_pos = p.global_position + Vector2(0.0, -8.0)
@@ -203,27 +227,38 @@ func _process_attack(delta: float) -> void:
 				_target_marker.visible = true
 
 	if _attack_timer <= 0.0:
-		_attack_timer = attack_interval
 		if _target_marker:
 			_target_marker.visible = false
+		_burst_shots_remaining = maxi(burst_count, 1) - 1
+		_burst_timer = burst_interval
 		_perform_attack(muzzle_pos)
+		if _burst_shots_remaining == 0:
+			_attack_timer = attack_interval
 		_has_locked_aim = false
 
 
 func _perform_attack(muzzle_pos: Vector2) -> void:
 	var player := _find_player()
-	if player == null:
+	if player == null and not shoot_straight:
 		return
 
-	# Запускаємо 6-кадрову анімацію пострілу ворога (Рядок 1)
+	# Запускаємо анімацію пострілу ворога (Рядок 1) та звук пострілу (якщо заданий)
 	_shoot_anim_timer = _shoot_anim_duration
 	if body_sprite:
 		body_sprite.frame_coords = Vector2i(0, ENEMY_ROW_SHOOT)
 		_spawn_enemy_shell()
+	if shot_sound:
+		shot_sound.pitch_scale = randf_range(0.96, 1.04) if not use_sniper_laser else randf_range(0.98, 1.02)
+		shot_sound.play()
 
-	var target_pos := _locked_aim_pos if _has_locked_aim else (player.global_position + Vector2(0.0, -8.0))
-	if not use_sniper_laser:
-		target_pos += Vector2(randf_range(-6.0, 6.0), randf_range(-9.0, 9.0))
+	var target_pos: Vector2
+	if shoot_straight:
+		# Стріляє строго прямо горизонтально вліво
+		target_pos = muzzle_pos + Vector2(-1200.0, 0.0)
+	else:
+		target_pos = _locked_aim_pos if _has_locked_aim else (player.global_position + Vector2(0.0, -8.0))
+		if not use_sniper_laser:
+			target_pos += Vector2(randf_range(-6.0, 6.0), randf_range(-9.0, 9.0))
 
 	if shot_line:
 		shot_line.visible = false
@@ -231,14 +266,14 @@ func _perform_attack(muzzle_pos: Vector2) -> void:
 	var parent_node := get_parent()
 	if parent_node != null:
 		var proj := Projectile.new()
-		var b_type := Projectile.BulletType.SNIPER_RED if use_sniper_laser else Projectile.BulletType.ENEMY_BLUE
+		var b_type := Projectile.BulletType.SNIPER_RED if (use_sniper_laser or use_red_bullet) else Projectile.BulletType.ENEMY_BLUE
 		proj.setup(
 			b_type,
 			muzzle_pos,
 			target_pos,
 			attack_damage,
 			projectile_speed,
-			true
+			false
 		)
 		parent_node.add_child(proj)
 

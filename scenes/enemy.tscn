@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3 uid="uid://dkbpmxwomndbi"]
+[gd_scene load_steps=5 format=3 uid="uid://dkbpmxwomndbi"]
 
 [ext_resource type="Script" uid="uid://b0j1rpe7d22dc" path="res://scripts/enemy.gd" id="1_enemy"]
 [ext_resource type="Texture2D" path="res://assets/enemy_spritesheet.png" id="2_enemy_sheet"]
+[ext_resource type="AudioStream" path="res://assets/enemy_shoot.mp3" id="3_enemy_shoot"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_xrivr"]
 size = Vector2(48, 82)
@@ -31,3 +32,8 @@ top_level = true
 visible = false
 width = 2.0
 default_color = Color(1, 0.85, 0.3, 0.9)
+
+[node name="ShotSound" type="AudioStreamPlayer" parent="." unique_id=191100205]
+stream = ExtResource("3_enemy_shoot")
+volume_db = -3.5
+max_polyphony = 2

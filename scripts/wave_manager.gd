@@ -6,6 +6,7 @@ signal wave_cleared
 signal all_waves_cleared
 
 @export var enemy_scene: PackedScene = preload("res://scenes/enemy.tscn")
+@export var heavy_gunner_scene: PackedScene = preload("res://scenes/heavy_gunner.tscn")
 @export var sniper_scene: PackedScene = preload("res://scenes/sniper.tscn")
 @export var spawn_interval := 3.2
 @export var delay_between_waves := 3.5
@@ -19,9 +20,9 @@ signal all_waves_cleared
 @export var auto_start := true
 
 @export var waves: Array[Dictionary] = [
-	{"infantry": 5, "snipers": 0},
-	{"infantry": 8, "snipers": 0},
-	{"infantry": 8, "snipers": 1},
+	{"infantry": 5, "heavy": 1, "snipers": 0},
+	{"infantry": 7, "heavy": 2, "snipers": 0},
+	{"infantry": 8, "heavy": 2, "snipers": 1},
 ]
 
 var current_wave_index := -1
@@ -85,13 +86,19 @@ func _start_next_wave() -> void:
 
 func _build_wave_queue(wave_data: Dictionary) -> Array[String]:
 	var infantry_count := int(wave_data.get("infantry", 0))
+	var heavy_count := int(wave_data.get("heavy", 0))
 	var sniper_count := int(wave_data.get("snipers", 0))
 	var queue: Array[String] = []
 
 	for i in range(infantry_count):
 		queue.append("infantry")
 
-	# Вставляємо снайпера після перших 2 піхотинців, щоб тримав окоп під прицілом зверху справа
+	# Вставляємо важких кулеметників серед хвилі піхоти
+	for h in range(heavy_count):
+		var h_idx := mini(1 + h * 3, queue.size())
+		queue.insert(h_idx, "heavy")
+
+	# Вставляємо снайпера після перших піхотинців, щоб тримав окоп під прицілом зверху справа
 	for s in range(sniper_count):
 		var insert_idx := mini(2 + s * 3, queue.size())
 		queue.insert(insert_idx, "sniper")
@@ -111,7 +118,11 @@ func _spawn_next_from_queue() -> void:
 		return
 
 	var unit_type: String = _spawn_queue.pop_front()
-	var packed: PackedScene = sniper_scene if unit_type == "sniper" else enemy_scene
+	var packed: PackedScene = enemy_scene
+	if unit_type == "sniper":
+		packed = sniper_scene
+	elif unit_type == "heavy":
+		packed = heavy_gunner_scene
 	if packed == null:
 		return
 
@@ -123,6 +134,12 @@ func _spawn_next_from_queue() -> void:
 		unit.global_position = Vector2(
 			randf_range(sniper_x_min, sniper_x_max),
 			randf_range(sniper_y_min, sniper_y_max)
+		)
+	elif unit_type == "heavy":
+		# Важкий кулеметник виходить на лінію окопу (y: 435..615), щоб його пряма черга з 8 червоних куль летіла впоперек окопу
+		unit.global_position = Vector2(
+			infantry_spawn_x,
+			randf_range(435.0, 615.0)
 		)
 	else:
 		unit.global_position = Vector2(
