@@ -20,6 +20,7 @@ const ENEMY_ROW_DEATH := 3
 @export var stop_distance := 340.0
 @export var attack_interval := 1.6
 @export var attack_damage := 7.0
+@export var projectile_speed := 540.0
 @export var is_stationary := false
 @export var use_sniper_laser := false
 
@@ -62,6 +63,10 @@ func _ready() -> void:
 		_base_sprite_scale = body_sprite.scale
 	if use_sniper_laser:
 		_shoot_anim_duration = 0.42
+		if is_equal_approx(projectile_speed, 540.0):
+			projectile_speed = 1650.0
+	if shot_line:
+		shot_line.visible = false
 	if body_rect:
 		_base_color = body_rect.color
 
@@ -179,21 +184,6 @@ func _process_attack(delta: float) -> void:
 				_target_marker.global_position = Vector2(_locked_aim_pos.x, _locked_aim_pos.y + 30.0)
 				_target_marker.visible = true
 
-	if use_sniper_laser and shot_line and _shot_visual_timer <= 0.0:
-		if _attack_timer <= 0.85 and _attack_timer > 0.0:
-			var aim_point := _locked_aim_pos
-			if not _has_locked_aim:
-				var player := _find_player()
-				if player:
-					aim_point = player.global_position + Vector2(0.0, -8.0)
-			if aim_point != Vector2.ZERO:
-				shot_line.width = 1.5
-				shot_line.default_color = Color(1.0, 0.15, 0.15, 0.7)
-				shot_line.clear_points()
-				shot_line.add_point(muzzle_pos)
-				shot_line.add_point(aim_point)
-				shot_line.visible = true
-
 	if _attack_timer <= 0.0:
 		_attack_timer = attack_interval
 		if _target_marker:
@@ -214,19 +204,25 @@ func _perform_attack(muzzle_pos: Vector2) -> void:
 		_spawn_enemy_shell()
 
 	var target_pos := _locked_aim_pos if _has_locked_aim else (player.global_position + Vector2(0.0, -8.0))
-	var dodged_by_roll := absf(player.global_position.y - target_pos.y) > 42.0
-
-	if not dodged_by_roll and player.has_method("take_damage"):
-		player.take_damage(attack_damage)
+	if not use_sniper_laser:
+		target_pos += Vector2(randf_range(-6.0, 6.0), randf_range(-9.0, 9.0))
 
 	if shot_line:
-		_shot_visual_timer = 0.08
-		shot_line.width = 3.0 if use_sniper_laser else 2.0
-		shot_line.default_color = Color(1.0, 0.88, 0.35, 0.92)
-		shot_line.clear_points()
-		shot_line.add_point(muzzle_pos)
-		shot_line.add_point(target_pos + Vector2(randf_range(-8.0, 8.0), randf_range(-10.0, 10.0)))
-		shot_line.visible = true
+		shot_line.visible = false
+
+	var parent_node := get_parent()
+	if parent_node != null:
+		var proj := Projectile.new()
+		var b_type := Projectile.BulletType.SNIPER_RED if use_sniper_laser else Projectile.BulletType.ENEMY_BLUE
+		proj.setup(
+			b_type,
+			muzzle_pos,
+			target_pos,
+			attack_damage,
+			projectile_speed,
+			true
+		)
+		parent_node.add_child(proj)
 
 
 func _spawn_enemy_shell() -> void:

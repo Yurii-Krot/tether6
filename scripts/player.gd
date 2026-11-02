@@ -22,6 +22,7 @@ const ANIM_ROW_ROLL := 3
 
 @export var damage := 10.0
 @export var fire_rate := 10.0 # 0.1 с між пострілами
+@export var bullet_speed := 1380.0
 @export var magazine_size := 30
 @export var reload_time := 1.5
 @export var max_health := 100.0
@@ -220,42 +221,26 @@ func _update_sprite_frame_animation(delta: float) -> void:
 
 
 func shoot(aim: Vector2) -> void:
-	var space_state := get_world_2d().direct_space_state
 	var origin := muzzle.global_position
-	var dir := (aim - origin).normalized()
-	if dir == Vector2.ZERO:
-		dir = Vector2.RIGHT
+	var target_pos := aim
+	if target_pos.x < origin.x + 40.0:
+		target_pos = origin + Vector2.RIGHT.rotated(weapon_pivot.rotation) * 900.0
 
-	var ray_end := origin + dir * 2000.0
-	var target_collider: Object = null
+	var parent_node := get_parent()
+	if parent_node != null:
+		var proj := Projectile.new()
+		var stop_on_ground := target_pos.distance_to(origin) > 110.0
+		proj.setup(
+			Projectile.BulletType.PLAYER_YELLOW,
+			origin,
+			target_pos,
+			damage,
+			bullet_speed,
+			stop_on_ground
+		)
+		parent_node.add_child(proj)
 
-	# Спочатку перевіряємо точне наведення хрестика (як у Peacekeeper)
-	var point_query := PhysicsPointQueryParameters2D.new()
-	point_query.position = aim
-	point_query.collide_with_bodies = true
-	var point_hits := space_state.intersect_point(point_query, 4)
-	for hit_info in point_hits:
-		var col: Object = hit_info.get("collider")
-		if col and col.has_method("take_damage"):
-			target_collider = col
-			ray_end = aim
-			break
-
-	# Якщо під самим курсором ворога немає — пускаємо промінь вздовж лінії пострілу
-	if target_collider == null:
-		var ray_query := PhysicsRayQueryParameters2D.create(origin, ray_end)
-		var ray_hit := space_state.intersect_ray(ray_query)
-		if ray_hit:
-			ray_end = ray_hit.position
-			if ray_hit.collider and ray_hit.collider.has_method("take_damage"):
-				target_collider = ray_hit.collider
-
-	var hit_enemy := false
-	if target_collider != null:
-		hit_enemy = true
-		target_collider.take_damage(damage)
-
-	_trigger_shot_feedback(ray_end, hit_enemy)
+	_trigger_shot_feedback()
 
 
 func take_damage(amount: float) -> void:
@@ -474,19 +459,14 @@ func _process_reload_in_cover(delta: float) -> void:
 		_update_hud()
 
 
-func _trigger_shot_feedback(target_point: Vector2, hit_enemy: bool = false) -> void:
+func _trigger_shot_feedback() -> void:
 	_shoot_anim_timer = _shoot_anim_duration
 	body.frame_coords = Vector2i(0, ANIM_ROW_SHOOT)
 	if weapon_sprite:
 		weapon_sprite.frame = 1
 
-	# Трасер пострілу
-	_flash_timer = 0.045
 	muzzle_flash.visible = false
-	tracer_line.clear_points()
-	tracer_line.add_point(muzzle.global_position)
-	tracer_line.add_point(target_point)
-	tracer_line.visible = true
+	tracer_line.visible = false
 
 	# Звук
 	shot_sound.pitch_scale = randf_range(0.95, 1.06)
@@ -498,7 +478,6 @@ func _trigger_shot_feedback(target_point: Vector2, hit_enemy: bool = false) -> v
 	barrel.position.x = -_recoil_offset
 
 	_spawn_shell_casing()
-	_spawn_hit_sparks(target_point, hit_enemy)
 
 
 func _spawn_shell_casing() -> void:
