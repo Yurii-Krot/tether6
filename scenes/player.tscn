@@ -1,7 +1,7 @@
 [gd_scene load_steps=6 format=3 uid="uid://d3gd58em08r2x"]
 
 [ext_resource type="Script" uid="uid://0u88oudd7ydq" path="res://scripts/player.gd" id="1_3vyb7"]
-[ext_resource type="AudioStream" path="res://assets/shoot.wav" id="2_shoot"]
+[ext_resource type="AudioStream" path="res://assets/shoot.mp3" id="2_shoot"]
 [ext_resource type="AudioStream" uid="uid://ds3g3geq0xip" path="res://assets/reload.wav" id="3_reload"]
 [ext_resource type="Texture2D" path="res://assets/player_spritesheet.png" id="4_player_sheet"]
 [ext_resource type="Texture2D" path="res://assets/player_rifle_sheet.png" id="5_rifle_sheet"]
