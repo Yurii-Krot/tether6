@@ -242,9 +242,11 @@ func shoot(aim: Vector2) -> void:
 	_trigger_shot_feedback()
 
 
-func take_damage(amount: float) -> void:
-	# У стані спокою (is_in_cover) та під час кувирка (is_rolling) боєць невразливий!
-	if is_dead or is_in_cover or is_rolling or amount <= 0.0:
+func take_damage(amount: float, ignore_cover: bool = false) -> void:
+	# У стані спокою (is_in_cover) звичайні кулі не ранять, але вибух ракети в плитці окопа пробиває укриття (рятує перекат W/S на іншу плитку)
+	if is_dead or is_rolling or amount <= 0.0:
+		return
+	if is_in_cover and not ignore_cover:
 		return
 
 	health = maxf(health - amount, 0.0)

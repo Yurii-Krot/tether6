@@ -12,16 +12,20 @@ enum Phase {
 	TURN,
 	DESCEND,
 	DROP,
+	ROCKET_ATTACK,
 	ASCEND,
 	LEAVE,
 }
 
 const BLADE_TEX := preload("res://assets/heli_blade.png")
+const TRENCH_X := 185.0
+const TRENCH_TILES_Y: Array[float] = [440.0, 535.0, 625.0]
 
 # Координати в пікселях текстури heli_body.png (центр спрайта = 0,0), ніс дивиться вліво
 const ROTOR_HUB := Vector2(-84.0, -113.0)
 const TAIL_HUB := Vector2(278.0, -85.0)
 const DOOR_ANCHOR := Vector2(-80.0, 30.0)
+const ROCKET_POD_POS := Vector2(-22.0, 58.0)
 const EXHAUST_POS := Vector2(60.0, -20.0)
 const MAIN_ROTOR_RADIUS := 300.0
 const MAIN_ROTOR_TILT := 11.0
@@ -33,6 +37,10 @@ const VISUAL_SCALE := 0.9
 @export var exit_to := Vector2(-560.0, 30.0)
 @export var enter_duration := 3.8
 @export var drop_interval := 0.6
+@export var rocket_count := 4
+@export var rocket_interval := 1.05
+@export var rocket_speed := 740.0
+@export var rocket_damage := 24.0
 @export var ground_dust_y := 395.0
 @export var land_y_min := 430.0
 @export var land_y_max := 600.0
@@ -54,6 +62,9 @@ var _tilt := 0.0
 var _drop_index := 0
 var _drop_timer := 0.0
 var _last_land_time := 0.0
+var _rockets_fired := 0
+var _rocket_timer := 0.0
+var _last_targeted_tile_idx := -1
 var _dust_timer := 0.0
 var _smoke_timer := 0.0
 var _hover_amount := 0.0
@@ -65,6 +76,8 @@ var _rotor_front: Node2D
 var _tail_rotor: Node2D
 var _swirl: Node2D
 var _ground_shadow: Polygon2D
+var _rotor_sound: AudioStreamPlayer
+var _rocket_sound: AudioStreamPlayer
 
 
 func setup(p_troops: Array[String]) -> void:
@@ -78,6 +91,13 @@ func _ready() -> void:
 	_rotor_front = $Visual/RotorFront
 	_tail_rotor = $Visual/TailRotor
 	_swirl = $Visual/Swirl
+	_rotor_sound = get_node_or_null("RotorSound")
+	_rocket_sound = get_node_or_null("RocketLaunchSound")
+
+	if _rotor_sound:
+		_rotor_sound.volume_db = -24.0
+		_rotor_sound.play()
+		_rotor_sound.finished.connect(_on_rotor_sound_finished)
 
 	_rotor_back.draw.connect(_draw_main_rotor.bind(_rotor_back, false))
 	_rotor_front.draw.connect(_draw_main_rotor.bind(_rotor_front, true))
@@ -145,6 +165,10 @@ func _process(delta: float) -> void:
 		Phase.DROP:
 			_base_pos = hover_position
 			_process_drop(delta)
+		Phase.ROCKET_ATTACK:
+			# Зависає в повітрі після висадки десанту й послідовно випускає ракети по плитках окопа
+			_base_pos = hover_position + Vector2(0.0, -4.0)
+			_process_rocket_attack(delta)
 		Phase.ASCEND:
 			var t := clampf(_phase_time / 0.8, 0.0, 1.0)
 			_base_pos = hover_position + Vector2(10.0 * t, -30.0 * t * t)
@@ -185,8 +209,116 @@ func _process_drop(delta: float) -> void:
 			_drop_index += 1
 			var slide_time := clampf((land.y - from.y) / 430.0, 0.6, 1.35)
 			_last_land_time = _phase_time + slide_time
-	elif _phase_time >= _last_land_time + 0.55:
+	elif _phase_time >= _last_land_time + 0.45:
+		_rockets_fired = 0
+		_rocket_timer = 0.25
+		_last_targeted_tile_idx = -1
+		_set_phase(Phase.ROCKET_ATTACK)
+
+
+func _process_rocket_attack(delta: float) -> void:
+	if _rockets_fired < rocket_count:
+		_rocket_timer -= delta
+		if _rocket_timer <= 0.0:
+			_rocket_timer = rocket_interval
+			_fire_next_rocket()
+			_rockets_fired += 1
+	elif _phase_time >= float(rocket_count) * rocket_interval + 0.55:
 		_set_phase(Phase.ASCEND)
+
+
+func _fire_next_rocket() -> void:
+	var parent_node := get_parent()
+	if parent_node == null:
+		return
+
+	var pod_world_pos := _visual.get_global_transform() * ROCKET_POD_POS
+	var tile_idx := _choose_trench_tile_index()
+	_last_targeted_tile_idx = tile_idx
+	var tile_target := Vector2(TRENCH_X, TRENCH_TILES_Y[tile_idx])
+
+	var rocket := HeliRocket.new()
+	rocket.setup(pod_world_pos, tile_target, rocket_speed, rocket_damage)
+	parent_node.add_child(rocket)
+
+	# Віддача корпусу вертольота при пуску ракети + спалах з блоку НАР
+	_tilt -= 0.045
+	_spawn_rocket_launch_flash(pod_world_pos)
+
+	if _rocket_sound:
+		_rocket_sound.pitch_scale = randf_range(0.96, 1.04)
+		_rocket_sound.play()
+
+
+func _choose_trench_tile_index() -> int:
+	var player := get_tree().get_first_node_in_group("player") as Node2D
+	if player != null and not player.get("is_dead"):
+		# Знаходимо плитку окопа, на якій зараз стоїть гравець
+		var best_idx := 1
+		var best_dist := INF
+		for i in range(TRENCH_TILES_Y.size()):
+			var d := absf(player.global_position.y - TRENCH_TILES_Y[i])
+			if d < best_dist:
+				best_dist = d
+				best_idx = i
+		# Якщо попередня ракета вже летіла в цю ж саму плитку і гравець не встиг переміститись — чергуємо з сусідньою
+		if best_idx == _last_targeted_tile_idx and randf() < 0.45:
+			return (best_idx + 1 + randi() % 2) % TRENCH_TILES_Y.size()
+		return best_idx
+	return (_rockets_fired + randi() % 2) % TRENCH_TILES_Y.size()
+
+
+func _spawn_rocket_launch_flash(pod_pos: Vector2) -> void:
+	var parent_node := get_parent()
+	if parent_node == null:
+		return
+
+	# Яскравий спалах пуску спереду блоку НАР С-8
+	var flash := Polygon2D.new()
+	flash.color = Color(1.0, 0.82, 0.30, 0.96)
+	flash.polygon = PackedVector2Array([
+		Vector2(0.0, -7.0),
+		Vector2(-26.0, -12.0),
+		Vector2(-16.0, -2.0),
+		Vector2(-34.0, 2.0),
+		Vector2(-15.0, 5.0),
+		Vector2(-24.0, 13.0),
+		Vector2(0.0, 7.0),
+	])
+	flash.global_position = pod_pos + Vector2(-12.0, 2.0)
+	flash.z_index = 4
+	parent_node.add_child(flash)
+
+	var ftw := flash.create_tween()
+	ftw.tween_property(flash, "scale", Vector2(1.3, 1.3), 0.08)
+	ftw.parallel().tween_property(flash, "modulate:a", 0.0, 0.12)
+	ftw.tween_callback(flash.queue_free)
+
+	# Хмарка реактивного диму позаду блоку НАР
+	var back_puff := Polygon2D.new()
+	back_puff.color = Color(0.82, 0.80, 0.76, 0.65)
+	back_puff.polygon = PackedVector2Array([
+		Vector2(-8.0, -6.0),
+		Vector2(10.0, -8.0),
+		Vector2(18.0, 0.0),
+		Vector2(10.0, 8.0),
+		Vector2(-8.0, 6.0),
+	])
+	back_puff.global_position = pod_pos + Vector2(18.0, 2.0)
+	back_puff.z_index = 2
+	parent_node.add_child(back_puff)
+
+	var btw := back_puff.create_tween()
+	btw.set_parallel(true)
+	btw.tween_property(back_puff, "global_position", back_puff.global_position + Vector2(36.0, 10.0), 0.32)
+	btw.tween_property(back_puff, "scale", Vector2(2.2, 1.8), 0.32)
+	btw.tween_property(back_puff, "modulate:a", 0.0, 0.32)
+	btw.chain().tween_callback(back_puff.queue_free)
+
+
+func _on_rotor_sound_finished() -> void:
+	if _rotor_sound and is_inside_tree():
+		_rotor_sound.play()
 
 
 func _update_motion(delta: float) -> void:
@@ -217,6 +349,11 @@ func _update_effects(delta: float) -> void:
 		var on_screen := clampf((global_position.x + 200.0) / 300.0, 0.0, 1.0)
 		_ground_shadow.modulate.a = 0.55 * alt * on_screen
 		_ground_shadow.scale = Vector2(lerpf(0.8, 1.0, alt), 1.0)
+
+	# Плавне регулювання гучності гвинтів залежно від положення вертольота на екрані (трохи тихіше, щоб не глушило постріли)
+	if _rotor_sound:
+		var screen_presence := clampf((global_position.x + 360.0) / 520.0, 0.0, 1.0)
+		_rotor_sound.volume_db = lerpf(-26.0, -10.5, screen_presence)
 
 	# Пил від потоку повітря з гвинта, що розлітається по полю в обидва боки
 	if _hover_amount > 0.3 and global_position.x > -100.0 and global_position.x < 1380.0:

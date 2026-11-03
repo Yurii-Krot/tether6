@@ -1,7 +1,9 @@
-[gd_scene format=3 uid="uid://c8helicopter1"]
+[gd_scene load_steps=5 format=3 uid="uid://c8helicopter1"]
 
 [ext_resource type="Script" path="res://scripts/helicopter.gd" id="1_heli"]
 [ext_resource type="Texture2D" path="res://assets/heli_body.png" id="2_body"]
+[ext_resource type="AudioStream" path="res://assets/heli_rotor.wav" id="3_rotor_sfx"]
+[ext_resource type="AudioStream" path="res://assets/rocket_launch.ogg" id="4_rocket_sfx"]
 
 [node name="Helicopter" type="Node2D"]
 script = ExtResource("1_heli")
@@ -23,3 +25,12 @@ z_index = 1
 
 [node name="Swirl" type="Node2D" parent="Visual"]
 z_index = 2
+
+[node name="RotorSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("3_rotor_sfx")
+volume_db = -10.5
+
+[node name="RocketLaunchSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("4_rocket_sfx")
+volume_db = -8.5
+max_polyphony = 3
