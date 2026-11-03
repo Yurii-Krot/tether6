@@ -1,0 +1,40 @@
+[gd_scene format=3 uid="uid://c8shtgunner01"]
+
+[ext_resource type="Script" uid="uid://b0j1rpe7d22dc" path="res://scripts/enemy.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/shotgunner_spritesheet.png" id="2_shotgun_sheet"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_shotgun"]
+size = Vector2(60, 98)
+
+[node name="Shotgunner" type="CharacterBody2D" unique_id=191400401]
+collision_mask = 0
+script = ExtResource("1_enemy")
+health = 45.0
+speed = 98.0
+stop_distance = 275.0
+attack_interval = 2.1
+attack_damage = 6.0
+projectile_speed = 560.0
+pellet_count = 5
+spread_angle_deg = 28.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=191400402]
+shape = SubResource("RectangleShape2D_shotgun")
+
+[node name="Shadow" type="Polygon2D" parent="." unique_id=191400403]
+position = Vector2(0, 44)
+color = Color(0, 0, 0, 0.38)
+polygon = PackedVector2Array(-31, 0, -22, -6, 0, -8.5, 22, -6, 31, 0, 22, 6, 0, 8.5, -22, 6)
+
+[node name="BodySprite" type="Sprite2D" parent="." unique_id=191400404]
+scale = Vector2(0.48, 0.48)
+texture = ExtResource("2_shotgun_sheet")
+offset = Vector2(-34, -6)
+hframes = 12
+vframes = 4
+
+[node name="ShotLine" type="Line2D" parent="." unique_id=191400405]
+top_level = true
+visible = false
+width = 2.0
+default_color = Color(0.25, 0.75, 1, 0.9)

@@ -5,7 +5,7 @@
 [ext_resource type="AudioStream" path="res://assets/enemy_shoot.mp3" id="3_enemy_shoot"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_xrivr"]
-size = Vector2(48, 82)
+size = Vector2(58, 98)
 
 [node name="Enemy" type="CharacterBody2D" unique_id=355634528]
 collision_mask = 0
@@ -16,12 +16,12 @@ projectile_speed = 540.0
 shape = SubResource("RectangleShape2D_xrivr")
 
 [node name="Shadow" type="Polygon2D" parent="." unique_id=191100200]
-position = Vector2(0, 38)
+position = Vector2(0, 45)
 color = Color(0, 0, 0, 0.38)
-polygon = PackedVector2Array(-24, 0, -17, -5, 0, -7, 17, -5, 24, 0, 17, 5, 0, 7, -17, 5)
+polygon = PackedVector2Array(-29, 0, -20, -6, 0, -8.5, 20, -6, 29, 0, 20, 6, 0, 8.5, -20, 6)
 
 [node name="BodySprite" type="Sprite2D" parent="." unique_id=1491544401]
-scale = Vector2(0.4, 0.4)
+scale = Vector2(0.48, 0.48)
 texture = ExtResource("2_enemy_sheet")
 offset = Vector2(-22, -6)
 hframes = 12

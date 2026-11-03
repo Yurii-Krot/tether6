@@ -6,6 +6,7 @@ signal wave_cleared
 signal all_waves_cleared
 
 @export var enemy_scene: PackedScene = preload("res://scenes/enemy.tscn")
+@export var shotgunner_scene: PackedScene = preload("res://scenes/shotgunner.tscn")
 @export var heavy_gunner_scene: PackedScene = preload("res://scenes/heavy_gunner.tscn")
 @export var sniper_scene: PackedScene = preload("res://scenes/sniper.tscn")
 @export var spawn_interval := 3.2
@@ -20,9 +21,9 @@ signal all_waves_cleared
 @export var auto_start := true
 
 @export var waves: Array[Dictionary] = [
-	{"infantry": 5, "heavy": 1, "snipers": 0},
-	{"infantry": 7, "heavy": 2, "snipers": 0},
-	{"infantry": 8, "heavy": 2, "snipers": 1},
+	{"infantry": 4, "shotgun": 2, "heavy": 1, "snipers": 0},
+	{"infantry": 6, "shotgun": 2, "heavy": 2, "snipers": 0},
+	{"infantry": 7, "shotgun": 3, "heavy": 2, "snipers": 1},
 ]
 
 var current_wave_index := -1
@@ -86,6 +87,7 @@ func _start_next_wave() -> void:
 
 func _build_wave_queue(wave_data: Dictionary) -> Array[String]:
 	var infantry_count := int(wave_data.get("infantry", 0))
+	var shotgun_count := int(wave_data.get("shotgun", 0))
 	var heavy_count := int(wave_data.get("heavy", 0))
 	var sniper_count := int(wave_data.get("snipers", 0))
 	var queue: Array[String] = []
@@ -93,9 +95,14 @@ func _build_wave_queue(wave_data: Dictionary) -> Array[String]:
 	for i in range(infantry_count):
 		queue.append("infantry")
 
+	# Вставляємо бійців з дробовиками серед хвилі
+	for sh in range(shotgun_count):
+		var sh_idx := mini(1 + sh * 2, queue.size())
+		queue.insert(sh_idx, "shotgun")
+
 	# Вставляємо важких кулеметників серед хвилі піхоти
 	for h in range(heavy_count):
-		var h_idx := mini(1 + h * 3, queue.size())
+		var h_idx := mini(2 + h * 3, queue.size())
 		queue.insert(h_idx, "heavy")
 
 	# Вставляємо снайпера після перших піхотинців, щоб тримав окоп під прицілом зверху справа
@@ -123,6 +130,8 @@ func _spawn_next_from_queue() -> void:
 		packed = sniper_scene
 	elif unit_type == "heavy":
 		packed = heavy_gunner_scene
+	elif unit_type == "shotgun":
+		packed = shotgunner_scene
 	if packed == null:
 		return
 

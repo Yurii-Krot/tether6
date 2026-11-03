@@ -136,7 +136,7 @@ func _check_player_bullet_hit(from_pos: Vector2, to_pos: Vector2) -> bool:
 			continue
 		var enemy_center := enemy.global_position
 		var closest := Geometry2D.get_closest_point_to_segment(enemy_center, from_pos, to_pos)
-		if absf(closest.x - enemy_center.x) <= 26.0 and absf(closest.y - enemy_center.y) <= 42.0:
+		if absf(closest.x - enemy_center.x) <= 31.0 and absf(closest.y - enemy_center.y) <= 50.0:
 			var d_sq := from_pos.distance_squared_to(closest)
 			if d_sq < best_dist_sq:
 				best_dist_sq = d_sq
@@ -160,7 +160,7 @@ func _check_enemy_bullet_hit(from_pos: Vector2, to_pos: Vector2) -> bool:
 		var dx := absf(closest.x - player_center.x)
 		var dy := absf(closest.y - player_center.y)
 
-		if dx <= 24.0 and dy <= 38.0:
+		if dx <= 29.0 and dy <= 46.0:
 			var in_cover := bool(player.get("is_in_cover"))
 			var rolling := bool(player.get("is_rolling"))
 			if not in_cover and not rolling:

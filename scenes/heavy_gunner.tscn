@@ -4,7 +4,7 @@
 [ext_resource type="Texture2D" path="res://assets/heavy_gunner_spritesheet.png" id="2_heavy_sheet"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_heavy"]
-size = Vector2(54, 86)
+size = Vector2(65, 103)
 
 [node name="HeavyGunner" type="CharacterBody2D" unique_id=191300401]
 collision_mask = 0
@@ -24,12 +24,12 @@ use_red_bullet = true
 shape = SubResource("RectangleShape2D_heavy")
 
 [node name="Shadow" type="Polygon2D" parent="." unique_id=191300403]
-position = Vector2(0, 38)
+position = Vector2(0, 45)
 color = Color(0, 0, 0, 0.42)
-polygon = PackedVector2Array(-28, 0, -20, -6, 0, -8, 20, -6, 28, 0, 20, 6, 0, 8, -20, 6)
+polygon = PackedVector2Array(-34, 0, -24, -7, 0, -9.5, 24, -7, 34, 0, 24, 7, 0, 9.5, -24, 7)
 
 [node name="BodySprite" type="Sprite2D" parent="." unique_id=191300404]
-scale = Vector2(0.41, 0.41)
+scale = Vector2(0.49, 0.49)
 texture = ExtResource("2_heavy_sheet")
 offset = Vector2(-50, -6)
 hframes = 12

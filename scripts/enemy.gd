@@ -23,6 +23,8 @@ const ENEMY_ROW_DEATH := 3
 @export var projectile_speed := 540.0
 @export var burst_count := 1
 @export var burst_interval := 0.12
+@export var pellet_count := 1
+@export var spread_angle_deg := 28.0
 @export var shoot_straight := false
 @export var use_red_bullet := false
 @export var is_stationary := false
@@ -45,7 +47,7 @@ var _hurt_anim_duration := 0.22
 var _death_anim_timer := 0.0
 var _death_anim_duration := 0.48
 var _blood_splashed := false
-var _base_sprite_scale := Vector2(0.4, 0.4)
+var _base_sprite_scale := Vector2(0.48, 0.48)
 var _last_step_col := -1
 var _burst_shots_remaining := 0
 var _burst_timer := 0.0
@@ -73,6 +75,9 @@ func _ready() -> void:
 		_shoot_anim_duration = 0.42
 		if is_equal_approx(projectile_speed, 540.0):
 			projectile_speed = 1650.0
+	elif pellet_count > 1:
+		# Довша тривалість анімації пострілу дробовика, щоб було добре видно пересмикування помпової цівки та виліт гільзи
+		_shoot_anim_duration = 0.48
 	if shot_line:
 		shot_line.visible = false
 	if body_rect:
@@ -193,14 +198,16 @@ func _process_advance() -> void:
 func _process_attack(delta: float) -> void:
 	velocity = Vector2.ZERO
 
-	var muzzle_offset := Vector2(-30.0, -2.0)
+	var muzzle_offset := Vector2(-36.0, -2.5)
 	if body_sprite != null:
 		if use_sniper_laser:
-			muzzle_offset = Vector2(-75.0, -5.5)
+			muzzle_offset = Vector2(-90.0, -6.5)
 		elif shoot_straight or burst_count > 1:
-			muzzle_offset = Vector2(-68.0, -6.0)
+			muzzle_offset = Vector2(-82.0, -7.2)
+		elif pellet_count > 1:
+			muzzle_offset = Vector2(-71.0, -12.0)
 		else:
-			muzzle_offset = Vector2(-49.0, 0.0)
+			muzzle_offset = Vector2(-59.0, 0.0)
 	var muzzle_pos := global_position + muzzle_offset
 
 	# Якщо триває черга пострілів (наприклад, 8 куль поспіль у кулеметника)
@@ -265,17 +272,39 @@ func _perform_attack(muzzle_pos: Vector2) -> void:
 
 	var parent_node := get_parent()
 	if parent_node != null:
-		var proj := Projectile.new()
 		var b_type := Projectile.BulletType.SNIPER_RED if (use_sniper_laser or use_red_bullet) else Projectile.BulletType.ENEMY_BLUE
-		proj.setup(
-			b_type,
-			muzzle_pos,
-			target_pos,
-			attack_damage,
-			projectile_speed,
-			false
-		)
-		parent_node.add_child(proj)
+		var total_pellets := maxi(pellet_count, 1)
+		if total_pellets == 1:
+			var proj := Projectile.new()
+			proj.setup(
+				b_type,
+				muzzle_pos,
+				target_pos,
+				attack_damage,
+				projectile_speed,
+				false
+			)
+			parent_node.add_child(proj)
+		else:
+			# Постріл з дробовика віялом: одразу 5 куль одночасно під різними кутами!
+			var base_dir := (target_pos - muzzle_pos).normalized()
+			if base_dir.length_squared() < 0.001:
+				base_dir = Vector2.LEFT
+			for i in range(total_pellets):
+				var frac := (float(i) / float(total_pellets - 1)) - 0.5
+				var angle_rad := deg_to_rad(frac * spread_angle_deg + randf_range(-1.2, 1.2))
+				var pellet_dir := base_dir.rotated(angle_rad)
+				var pellet_target := muzzle_pos + pellet_dir * 1000.0
+				var proj := Projectile.new()
+				proj.setup(
+					b_type,
+					muzzle_pos,
+					pellet_target,
+					attack_damage,
+					projectile_speed * randf_range(0.96, 1.04),
+					false
+				)
+				parent_node.add_child(proj)
 
 
 func _spawn_step_dust(is_near_foot: bool) -> void:
@@ -283,7 +312,7 @@ func _spawn_step_dust(is_near_foot: bool) -> void:
 	if parent_node == null:
 		return
 
-	var foot_offset := Vector2(-12.0, 36.0) if is_near_foot else Vector2(-16.0, 34.0)
+	var foot_offset := Vector2(-14.0, 43.0) if is_near_foot else Vector2(-19.0, 41.0)
 	for i in range(2):
 		var puff := Polygon2D.new()
 		puff.color = Color(0.58, 0.49, 0.38, 0.48)
@@ -313,13 +342,23 @@ func _spawn_enemy_shell() -> void:
 		return
 
 	var shell := Polygon2D.new()
-	shell.color = Color(0.95, 0.78, 0.28, 0.95)
-	shell.polygon = PackedVector2Array([
-		Vector2(-2.8, -1.1),
-		Vector2(2.8, -1.1),
-		Vector2(2.8, 1.1),
-		Vector2(-2.8, 1.1),
-	])
+	if pellet_count > 1:
+		# Червона гільза 12-го калібру для дробовика
+		shell.color = Color(0.85, 0.16, 0.16, 0.96)
+		shell.polygon = PackedVector2Array([
+			Vector2(-3.4, -1.5),
+			Vector2(3.4, -1.5),
+			Vector2(3.4, 1.5),
+			Vector2(-3.4, 1.5),
+		])
+	else:
+		shell.color = Color(0.95, 0.78, 0.28, 0.95)
+		shell.polygon = PackedVector2Array([
+			Vector2(-2.8, -1.1),
+			Vector2(2.8, -1.1),
+			Vector2(2.8, 1.1),
+			Vector2(-2.8, 1.1),
+		])
 	shell.global_position = global_position + Vector2(-10.0, -4.0)
 	parent_node.add_child(shell)
 
@@ -394,7 +433,7 @@ func _spawn_ground_blood_splatter() -> void:
 	if parent_node == null:
 		return
 
-	var impact_center := global_position + Vector2(14.0, 34.0)
+	var impact_center := global_position + Vector2(17.0, 41.0)
 
 	# 1. Калюжа крові на землі під тілом (як у The Peacekeeper)
 	var puddle := Node2D.new()

@@ -5,7 +5,7 @@
 [ext_resource type="AudioStream" path="res://assets/sniper_shoot.wav" id="3_sniper_shoot"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_sniper"]
-size = Vector2(46, 78)
+size = Vector2(55, 94)
 
 [node name="Sniper" type="CharacterBody2D" unique_id=191200301]
 collision_mask = 0
@@ -22,12 +22,12 @@ use_sniper_laser = true
 shape = SubResource("RectangleShape2D_sniper")
 
 [node name="Shadow" type="Polygon2D" parent="." unique_id=191200308]
-position = Vector2(0, 36)
+position = Vector2(0, 43)
 color = Color(0, 0, 0, 0.38)
-polygon = PackedVector2Array(-24, 0, -17, -5, 0, -7, 17, -5, 24, 0, 17, 5, 0, 7, -17, 5)
+polygon = PackedVector2Array(-29, 0, -20, -6, 0, -8.5, 20, -6, 29, 0, 20, 6, 0, 8.5, -20, 6)
 
 [node name="BodySprite" type="Sprite2D" parent="." unique_id=191200303]
-scale = Vector2(0.38, 0.38)
+scale = Vector2(0.46, 0.46)
 texture = ExtResource("2_sniper_sheet")
 offset = Vector2(-74, -6)
 hframes = 6

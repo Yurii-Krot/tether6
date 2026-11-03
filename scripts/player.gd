@@ -8,10 +8,10 @@ signal roll_started(direction: float)
 signal roll_finished
 
 const CROSSHAIR_TEXTURE := preload("res://assets/crosshair.png")
-const BASE_SPRITE_SCALE := Vector2(0.42, 0.42)
-const SHOULDER_OFFSET_STAND := Vector2(-7.5, -5.0)
-const SHOULDER_OFFSET_CROUCH := Vector2(-10.0, 5.5)
-const EJECT_LOCAL_POS := Vector2(24.0, -4.0)
+const BASE_SPRITE_SCALE := Vector2(0.5, 0.5)
+const SHOULDER_OFFSET_STAND := Vector2(-9.0, -6.0)
+const SHOULDER_OFFSET_CROUCH := Vector2(-12.0, 6.6)
+const EJECT_LOCAL_POS := Vector2(29.0, -5.0)
 
 # Рядки у спрайт-листі тіла res://assets/player_spritesheet.png (6x4 кадри)
 const ANIM_COLS := 6

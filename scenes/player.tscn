@@ -10,30 +10,30 @@
 script = ExtResource("1_3vyb7")
 
 [node name="Shadow" type="Polygon2D" parent="." unique_id=181100100]
-position = Vector2(0, 38)
+position = Vector2(0, 45)
 color = Color(0, 0, 0, 0.42)
-polygon = PackedVector2Array(-26, 0, -19, -6, 0, -8, 19, -6, 26, 0, 19, 6, 0, 8, -19, 6)
+polygon = PackedVector2Array(-31, 0, -23, -7, 0, -9.5, 23, -7, 31, 0, 23, 7, 0, 9.5, -23, 7)
 
 [node name="Body" type="Sprite2D" parent="." unique_id=450905754]
-scale = Vector2(0.42, 0.42)
+scale = Vector2(0.5, 0.5)
 texture = ExtResource("4_player_sheet")
 offset = Vector2(46, -10)
 hframes = 6
 vframes = 4
 
 [node name="WeaponPivot" type="Node2D" parent="." unique_id=181100102]
-position = Vector2(-7.5, -5)
+position = Vector2(-9, -6)
 
 [node name="Barrel" type="Node2D" parent="WeaponPivot" unique_id=181100103]
 
 [node name="WeaponSprite" type="Sprite2D" parent="WeaponPivot/Barrel" unique_id=181100115]
-scale = Vector2(0.42, 0.42)
+scale = Vector2(0.5, 0.5)
 texture = ExtResource("5_rifle_sheet")
 offset = Vector2(64, 2)
 hframes = 6
 
 [node name="Muzzle" type="Marker2D" parent="WeaponPivot/Barrel" unique_id=181100105]
-position = Vector2(60, 3)
+position = Vector2(72, 3.6)
 
 [node name="MuzzleFlash" type="Polygon2D" parent="WeaponPivot/Barrel/Muzzle" unique_id=181100106]
 visible = false
@@ -51,7 +51,7 @@ width = 2.4
 default_color = Color(1, 0.95, 0.55, 0.9)
 
 [node name="HUD" type="Node2D" parent="." unique_id=181100108]
-position = Vector2(0, 48)
+position = Vector2(0, 57)
 
 [node name="HealthBarBg" type="ColorRect" parent="HUD" unique_id=181100109]
 offset_left = -45.0
