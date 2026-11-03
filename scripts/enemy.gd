@@ -52,6 +52,16 @@ var _last_step_col := -1
 var _burst_shots_remaining := 0
 var _burst_timer := 0.0
 
+# Десантування з вертольота по канату (fast-rope)
+var _rappel_active := false
+var _rappel_anchor_node: Node2D = null
+var _rappel_from := Vector2.ZERO
+var _rappel_to := Vector2.ZERO
+var _rappel_t := 0.0
+var _rappel_duration := 1.0
+var _rappel_rope: Line2D = null
+var _shadow_base_pos := Vector2.ZERO
+
 @onready var collision_shape: CollisionShape2D = $CollisionShape2D
 @onready var body_sprite: Sprite2D = get_node_or_null("BodySprite")
 @onready var body_rect: ColorRect = get_node_or_null("ColorRect")
@@ -97,6 +107,11 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	_anim_time += delta
 	_update_shot_visual(delta)
+
+	if _rappel_active and state != State.DEAD:
+		_process_rappel(delta)
+		return
+
 	_update_sprite_animation(delta)
 
 	match state:
@@ -106,6 +121,103 @@ func _physics_process(delta: float) -> void:
 			_process_attack(delta)
 		State.DEAD:
 			velocity = Vector2.ZERO
+
+
+## Запускає спуск по канату з вертольота: anchor_node має метод get_rope_anchor() -> Vector2 (глобальна точка кріплення каната в дверях).
+func start_rappel(anchor_node: Node2D, from_pos: Vector2, land_pos: Vector2) -> void:
+	_rappel_active = true
+	_rappel_anchor_node = anchor_node
+	_rappel_from = from_pos
+	_rappel_to = land_pos
+	_rappel_t = 0.0
+	_rappel_duration = clampf((land_pos.y - from_pos.y) / 430.0, 0.6, 1.35)
+	global_position = from_pos
+	velocity = Vector2.ZERO
+	if shadow:
+		_shadow_base_pos = shadow.position
+
+	_rappel_rope = Line2D.new()
+	_rappel_rope.top_level = true
+	_rappel_rope.width = 3.0
+	_rappel_rope.default_color = Color(0.16, 0.12, 0.08, 0.95)
+	_rappel_rope.z_index = -1
+	_rappel_rope.points = PackedVector2Array([from_pos, from_pos])
+	add_child(_rappel_rope)
+
+
+func _get_rope_top() -> Vector2:
+	if _rappel_anchor_node != null and is_instance_valid(_rappel_anchor_node) and _rappel_anchor_node.has_method("get_rope_anchor"):
+		return _rappel_anchor_node.get_rope_anchor()
+	return _rappel_from
+
+
+func _process_rappel(delta: float) -> void:
+	_rappel_t = minf(_rappel_t + delta / _rappel_duration, 1.0)
+	# Різкий стрибок з дверей, швидке ковзання вниз і гальмування руками перед самою землею
+	var eased := _rappel_t * _rappel_t * (3.0 - 2.0 * _rappel_t)
+	eased = lerpf(_rappel_t, eased, 0.65)
+
+	var rope_top := _get_rope_top()
+	# Канат тягнеться від дверей до точки приземлення, боєць ковзає по ньому
+	var rope_bottom := Vector2(_rappel_to.x, _rappel_to.y - 30.0)
+	var pos := rope_top.lerp(Vector2(_rappel_to.x, _rappel_to.y), eased)
+	pos.y = lerpf(_rappel_from.y, _rappel_to.y, eased)
+	global_position = pos
+
+	if _rappel_rope:
+		_rappel_rope.points = PackedVector2Array([rope_top, rope_bottom.lerp(rope_bottom + Vector2(0.0, 20.0), eased)])
+
+	if body_sprite:
+		# Поза "ноги разом" з кадру ходьби + легке розгойдування на канаті
+		var cols := maxi(body_sprite.hframes, 1)
+		body_sprite.frame_coords = Vector2i(cols / 4, ENEMY_ROW_WALK)
+		body_sprite.rotation = sin(_anim_time * 9.0) * 0.06 * (1.0 - _rappel_t)
+
+	# Тінь лишається на землі в точці приземлення й росте при наближенні бійця
+	if shadow:
+		var height := _rappel_to.y - global_position.y
+		shadow.position = _shadow_base_pos + Vector2(0.0, height)
+		var s := lerpf(0.45, 1.0, clampf(1.0 - height / 380.0, 0.0, 1.0))
+		shadow.scale = Vector2(s, s)
+
+	if _rappel_t >= 1.0:
+		_finish_rappel()
+
+
+func _finish_rappel() -> void:
+	_rappel_active = false
+	global_position = _rappel_to
+	if shadow:
+		shadow.position = _shadow_base_pos
+		shadow.scale = Vector2.ONE
+	if body_sprite:
+		body_sprite.rotation = 0.0
+		# Присідання при приземленні
+		body_sprite.scale = Vector2(_base_sprite_scale.x * 1.14, _base_sprite_scale.y * 0.84)
+		var land_tween := create_tween()
+		land_tween.tween_property(body_sprite, "scale", _base_sprite_scale, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_spawn_step_dust(true)
+	_spawn_step_dust(false)
+	_release_rope()
+	state = State.ADVANCE
+	_attack_timer = attack_interval * randf_range(0.5, 0.9)
+
+
+func _release_rope() -> void:
+	if _rappel_rope == null or not is_instance_valid(_rappel_rope):
+		return
+	var rope := _rappel_rope
+	_rappel_rope = null
+	# Відпущений канат підтягується вгору до вертольота й зникає
+	var top := rope.points[0]
+	var rt := rope.create_tween()
+	rt.set_parallel(true)
+	rt.tween_method(func(v: float) -> void:
+		if is_instance_valid(rope) and rope.points.size() == 2:
+			rope.points = PackedVector2Array([rope.points[0], rope.points[1].lerp(top, v)])
+	, 0.0, 0.35, 0.35)
+	rt.tween_property(rope, "modulate:a", 0.0, 0.35)
+	rt.chain().tween_callback(rope.queue_free)
 
 
 func _update_sprite_animation(delta: float) -> void:
@@ -390,6 +502,9 @@ func take_damage(amount: float) -> bool:
 
 
 func _enter_dead_state() -> void:
+	var was_rappelling := _rappel_active
+	_rappel_active = false
+	_release_rope()
 	state = State.DEAD
 	velocity = Vector2.ZERO
 	_death_anim_timer = 0.0
@@ -403,6 +518,16 @@ func _enter_dead_state() -> void:
 		_target_marker.visible = false
 
 	died.emit()
+
+	if is_inside_tree() and was_rappelling:
+		# Збитий на канаті — зривається й падає на землю в точку приземлення
+		if body_sprite:
+			body_sprite.rotation = 0.0
+		if shadow:
+			shadow.position = _shadow_base_pos
+			shadow.scale = Vector2.ONE
+		var drop_tween := create_tween()
+		drop_tween.tween_property(self, "global_position", _rappel_to, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 	if is_inside_tree():
 		if body_sprite:

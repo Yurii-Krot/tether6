@@ -9,6 +9,7 @@ signal all_waves_cleared
 @export var shotgunner_scene: PackedScene = preload("res://scenes/shotgunner.tscn")
 @export var heavy_gunner_scene: PackedScene = preload("res://scenes/heavy_gunner.tscn")
 @export var sniper_scene: PackedScene = preload("res://scenes/sniper.tscn")
+@export var helicopter_scene: PackedScene = preload("res://scenes/helicopter.tscn")
 @export var spawn_interval := 3.2
 @export var delay_between_waves := 3.5
 @export var infantry_spawn_x := 1295.0
@@ -21,10 +22,12 @@ signal all_waves_cleared
 @export var auto_start := true
 
 @export var waves: Array[Dictionary] = [
-	{"infantry": 4, "shotgun": 2, "heavy": 1, "snipers": 0},
-	{"infantry": 6, "shotgun": 2, "heavy": 2, "snipers": 0},
-	{"infantry": 7, "shotgun": 3, "heavy": 2, "snipers": 1},
+	{"infantry": 4, "shotgun": 2, "heavy": 1, "snipers": 0, "heli": 1, "heli_troops": 3},
+	{"infantry": 6, "shotgun": 2, "heavy": 2, "snipers": 0, "heli": 1, "heli_troops": 4},
+	{"infantry": 7, "shotgun": 3, "heavy": 2, "snipers": 1, "heli": 2, "heli_troops": 5},
 ]
+
+var _current_heli_troops := 4
 
 var current_wave_index := -1
 var _spawn_queue: Array[String] = []
@@ -110,6 +113,13 @@ func _build_wave_queue(wave_data: Dictionary) -> Array[String]:
 		var insert_idx := mini(2 + s * 3, queue.size())
 		queue.insert(insert_idx, "sniper")
 
+	# Вертоліт з десантом прилітає зліва посеред хвилі
+	_current_heli_troops = int(wave_data.get("heli_troops", 4))
+	var heli_count := int(wave_data.get("heli", 0))
+	for hc in range(heli_count):
+		var heli_idx := mini(2 + hc * 5, queue.size())
+		queue.insert(heli_idx, "heli")
+
 	return queue
 
 
@@ -125,6 +135,10 @@ func _spawn_next_from_queue() -> void:
 		return
 
 	var unit_type: String = _spawn_queue.pop_front()
+	if unit_type == "heli":
+		_spawn_helicopter()
+		return
+
 	var packed: PackedScene = enemy_scene
 	if unit_type == "sniper":
 		packed = sniper_scene
@@ -167,6 +181,67 @@ func _spawn_next_from_queue() -> void:
 	container.add_child(unit)
 
 
+func _get_scene_for_type(unit_type: String) -> PackedScene:
+	match unit_type:
+		"sniper":
+			return sniper_scene
+		"heavy":
+			return heavy_gunner_scene
+		"shotgun":
+			return shotgunner_scene
+	return enemy_scene
+
+
+func _register_unit(unit: Node) -> void:
+	var id := unit.get_instance_id()
+	_alive_enemies[id] = true
+	if unit.has_signal("died"):
+		unit.connect("died", _on_enemy_eliminated.bind(id), CONNECT_ONE_SHOT)
+	unit.tree_exited.connect(_on_enemy_eliminated.bind(id), CONNECT_ONE_SHOT)
+
+
+func _spawn_helicopter() -> void:
+	if helicopter_scene == null:
+		return
+	var heli := helicopter_scene.instantiate() as Helicopter
+	if heli == null:
+		return
+
+	# Різний десант: суміш піхоти, дробовиків та важких кулеметників
+	var pool: Array[String] = ["infantry", "infantry", "shotgun", "shotgun", "heavy"]
+	pool.shuffle()
+	var troops: Array[String] = []
+	for i in range(clampi(_current_heli_troops, 1, 8)):
+		troops.append(pool[i % pool.size()])
+	heli.setup(troops)
+	heli.trooper_drop_requested.connect(_on_heli_trooper_drop.bind(heli))
+
+	# Вертоліт рахується "живим", доки не висадить усіх і не полетить — щоб хвиля не завершилась передчасно
+	var id := heli.get_instance_id()
+	_alive_enemies[id] = true
+	heli.tree_exited.connect(_on_enemy_eliminated.bind(id), CONNECT_ONE_SHOT)
+
+	var container := get_parent() if get_parent() != null else get_tree().current_scene
+	container.add_child(heli)
+
+
+func _on_heli_trooper_drop(unit_type: String, from_pos: Vector2, land_pos: Vector2, heli: Node2D) -> void:
+	var packed := _get_scene_for_type(unit_type)
+	if packed == null:
+		return
+	var unit := packed.instantiate() as Node2D
+	if unit == null:
+		return
+	unit.global_position = from_pos
+	_register_unit(unit)
+	var container := get_parent() if get_parent() != null else get_tree().current_scene
+	container.add_child(unit)
+	if unit.has_method("start_rappel"):
+		unit.start_rappel(heli, from_pos, land_pos)
+	else:
+		unit.global_position = land_pos
+
+
 func _on_enemy_eliminated(instance_id: int) -> void:
 	if not _alive_enemies.has(instance_id):
 		return
@@ -176,6 +251,8 @@ func _on_enemy_eliminated(instance_id: int) -> void:
 
 func _check_wave_cleared() -> void:
 	if not _wave_in_progress:
+		return
+	if not is_inside_tree() or _spawn_timer == null or not _spawn_timer.is_inside_tree():
 		return
 	if not _spawn_queue.is_empty() or not _alive_enemies.is_empty():
 		return
