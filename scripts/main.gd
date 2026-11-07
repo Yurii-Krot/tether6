@@ -16,6 +16,17 @@ func _ready() -> void:
 	if player.has_signal("died"):
 		player.connect("died", _on_player_died)
 
+	# Плавний вихід із чорного затемнення після переходу з головного меню
+	var fade_in := ColorRect.new()
+	fade_in.color = Color(0.0, 0.0, 0.0, 1.0)
+	fade_in.size = Vector2(1600.0, 900.0)
+	fade_in.position = Vector2(-160.0, -90.0)
+	fade_in.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$UI.add_child(fade_in)
+	var tween := create_tween()
+	tween.tween_property(fade_in, "color:a", 0.0, 0.48).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(fade_in.queue_free)
+
 
 func _process(delta: float) -> void:
 	if not _game_over:
