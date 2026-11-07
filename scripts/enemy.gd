@@ -31,6 +31,7 @@ const ENEMY_ROW_DEATH := 3
 @export var use_sniper_laser := false
 
 var state: State = State.ADVANCE
+var _max_health := 30.0
 var _stop_x := 525.0
 var _attack_timer := 0.0
 var _shot_visual_timer := 0.0
@@ -38,6 +39,13 @@ var _base_color := Color.WHITE
 var _has_locked_aim := false
 var _locked_aim_pos := Vector2.ZERO
 var _target_marker: Polygon2D = null
+var _hp_bar_root: Node2D = null
+var _hp_bar_fill: Polygon2D = null
+var _hp_bar_timer := 0.0
+
+const HP_BAR_SHOW_DURATION := 0.52
+const HP_BAR_WIDTH := 64.0
+const HP_BAR_HEIGHT := 7.0
 
 var _anim_time := 0.0
 var _shoot_anim_timer := 0.0
@@ -74,7 +82,9 @@ func _ready() -> void:
 	add_to_group("enemies")
 	collision_layer = 1
 	collision_mask = 0
+	_max_health = maxf(health, 1.0)
 	_create_target_marker()
+	_create_hp_bar()
 
 	# Невеликий випадковий зсув фази кроку, щоб загін ворогів крокував природно, а не синхронно
 	_anim_time = randf_range(0.0, 10.0)
@@ -107,6 +117,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	_anim_time += delta
 	_update_shot_visual(delta)
+	_update_hp_bar(delta)
 
 	if _rappel_active and state != State.DEAD:
 		_process_rappel(delta)
@@ -225,14 +236,25 @@ func _update_sprite_animation(delta: float) -> void:
 		return
 
 	var cols := maxi(body_sprite.hframes, 1)
+	var rows := maxi(body_sprite.vframes, 1)
+	var is_six_row := (rows >= 6)
+	var row_shoot := 2 if is_six_row else ENEMY_ROW_SHOOT
+	var row_hurt := 3 if is_six_row else ENEMY_ROW_HURT
+	var row_death := 4 if is_six_row else ENEMY_ROW_DEATH
 
 	if state == State.DEAD:
-		_death_anim_timer = minf(_death_anim_timer + delta, _death_anim_duration)
+		_death_anim_timer += delta
 		var raw_t := clampf(_death_anim_timer / _death_anim_duration, 0.0, 1.0)
-		# Прискорення під вагою власного тіла (спочатку підгинаються коліна, потім важке падіння спиною об землю)
-		var gravity_t := pow(raw_t, 1.65)
+		var gravity_t := raw_t if is_six_row else pow(raw_t, 1.65)
 		var d_col := clampi(int(gravity_t * float(cols)), 0, cols - 1)
-		body_sprite.frame_coords = Vector2i(d_col, ENEMY_ROW_DEATH)
+
+		if is_six_row and _death_anim_timer > _death_anim_duration:
+			# Рядок 5 (кадри 0..5): тіло лежить на землі й поступово вицвітає у прозорий білий силует, як на референсі
+			var fade_t := clampf((_death_anim_timer - _death_anim_duration) / 0.85, 0.0, 1.0)
+			var f_col := clampi(int(fade_t * 6.0), 0, 5)
+			body_sprite.frame_coords = Vector2i(f_col, 5)
+		else:
+			body_sprite.frame_coords = Vector2i(d_col, row_death)
 
 		# У момент удару тілом об землю (половина анімації) — важкий "гуп" (squash) і бризки крові врізнобіч!
 		var impact_frame := maxi(cols / 2, 3)
@@ -251,33 +273,57 @@ func _update_sprite_animation(delta: float) -> void:
 	if _hurt_anim_timer > 0.0:
 		_hurt_anim_timer = maxf(_hurt_anim_timer - delta, 0.0)
 		var h_prog := 1.0 - (_hurt_anim_timer / _hurt_anim_duration)
-		var h_col := clampi(int(h_prog * float(cols)), 0, cols - 1)
-		body_sprite.frame_coords = Vector2i(h_col, ENEMY_ROW_HURT)
+		var hurt_frames := 7 if is_six_row else cols
+		var h_col := clampi(int(h_prog * float(hurt_frames)), 0, hurt_frames - 1)
+		body_sprite.frame_coords = Vector2i(h_col, row_hurt)
 		return
 
 	if _shoot_anim_timer > 0.0:
 		_shoot_anim_timer = maxf(_shoot_anim_timer - delta, 0.0)
 		var s_prog := 1.0 - (_shoot_anim_timer / _shoot_anim_duration)
-		var s_col := clampi(int(s_prog * float(cols)), 0, cols - 1)
-		body_sprite.frame_coords = Vector2i(s_col, ENEMY_ROW_SHOOT)
+		if is_six_row:
+			var s_col := clampi(1 + int(s_prog * float(cols - 1)), 1, cols - 1)
+			body_sprite.frame_coords = Vector2i(s_col, row_shoot)
+		else:
+			var s_col := clampi(int(s_prog * float(cols)), 0, cols - 1)
+			body_sprite.frame_coords = Vector2i(s_col, row_shoot)
 		return
 
 	if state == State.ADVANCE:
-		# Рядок 0: плавна 12-кадрова ІК-анімація ходьби (два повних кроки за цикл)
-		var walk_fps := 14.5 if cols >= 12 else 9.5
-		var walk_col := int(_anim_time * walk_fps) % cols
-		body_sprite.frame_coords = Vector2i(walk_col, ENEMY_ROW_WALK)
+		if is_six_row:
+			# 24-кадрова покадрова анімація бігу у 2 рядках (Рядок 0 + Рядок 1, по 12 кадрів у кожному)
+			var walk_fps_24 := 24.0
+			var total_walk_frames := cols * 2
+			var step_idx := int(_anim_time * walk_fps_24) % total_walk_frames
+			var w_row := step_idx / cols
+			var w_col := step_idx % cols
+			body_sprite.frame_coords = Vector2i(w_col, w_row)
 
-		# Динаміка тіні та пилу під черевиками на кожному кроці
-		var cycle_phase := (_anim_time * walk_fps / float(cols)) * TAU
-		if shadow:
-			var stride_width := cos(cycle_phase * 2.0)
-			shadow.scale = Vector2(1.0 + 0.12 * stride_width, 1.0 - 0.05 * stride_width)
+			var cycle_phase := (_anim_time * walk_fps_24 / float(total_walk_frames)) * TAU
+			if shadow:
+				var stride_width := cos(cycle_phase * 2.0)
+				shadow.scale = Vector2(1.0 + 0.14 * stride_width, 1.0 - 0.05 * stride_width)
 
-		if walk_col != _last_step_col:
-			_last_step_col = walk_col
-			if walk_col == 0 or walk_col == (cols / 2):
-				_spawn_step_dust(walk_col == 0)
+			if step_idx != _last_step_col:
+				_last_step_col = step_idx
+				if step_idx == 0 or step_idx == cols:
+					_spawn_step_dust(step_idx == 0)
+		else:
+			# Рядок 0: плавна 12-кадрова ІК-анімація ходьби (два повних кроки за цикл)
+			var walk_fps := 14.5 if cols >= 12 else 9.5
+			var walk_col := int(_anim_time * walk_fps) % cols
+			body_sprite.frame_coords = Vector2i(walk_col, ENEMY_ROW_WALK)
+
+			# Динаміка тіні та пилу під черевиками на кожному кроці
+			var cycle_phase := (_anim_time * walk_fps / float(cols)) * TAU
+			if shadow:
+				var stride_width := cos(cycle_phase * 2.0)
+				shadow.scale = Vector2(1.0 + 0.12 * stride_width, 1.0 - 0.05 * stride_width)
+
+			if walk_col != _last_step_col:
+				_last_step_col = walk_col
+				if walk_col == 0 or walk_col == (cols / 2):
+					_spawn_step_dust(walk_col == 0)
 	elif use_sniper_laser:
 		# Для снайпера Рядок 0 — це прицілювання в оптику та розгоряння червоного бліку прицілу перед пострілом!
 		if _attack_timer <= 0.85 and _attack_timer > 0.0:
@@ -288,11 +334,14 @@ func _update_sprite_animation(delta: float) -> void:
 			var breathe_col := int(_anim_time * 2.5) % 2
 			body_sprite.frame_coords = Vector2i(breathe_col, ENEMY_ROW_WALK)
 	else:
-		# У режимі атаки між пострілами тримає бойову стійку з легким диханням
+		# У режимі атаки між пострілами тримає бойову стійку
 		if shadow:
 			shadow.scale = Vector2.ONE
-		var ready_col := (cols - 2) + (int(_anim_time * 3.5) % 2)
-		body_sprite.frame_coords = Vector2i(ready_col, ENEMY_ROW_SHOOT)
+		if is_six_row:
+			body_sprite.frame_coords = Vector2i(0, row_shoot)
+		else:
+			var ready_col := (cols - 2) + (int(_anim_time * 3.5) % 2)
+			body_sprite.frame_coords = Vector2i(ready_col, row_shoot)
 
 
 func _process_advance() -> void:
@@ -361,10 +410,11 @@ func _perform_attack(muzzle_pos: Vector2) -> void:
 	if player == null and not shoot_straight:
 		return
 
-	# Запускаємо анімацію пострілу ворога (Рядок 1) та звук пострілу (якщо заданий)
+	# Запускаємо анімацію пострілу ворога та звук пострілу (якщо заданий)
 	_shoot_anim_timer = _shoot_anim_duration
 	if body_sprite:
-		body_sprite.frame_coords = Vector2i(0, ENEMY_ROW_SHOOT)
+		var is_six_row := body_sprite.vframes >= 6
+		body_sprite.frame_coords = Vector2i(1 if is_six_row else 0, 2 if is_six_row else ENEMY_ROW_SHOOT)
 		_spawn_enemy_shell()
 	if shot_sound:
 		shot_sound.pitch_scale = randf_range(0.96, 1.04) if not use_sniper_laser else randf_range(0.98, 1.02)
@@ -489,15 +539,22 @@ func take_damage(amount: float) -> bool:
 	if state == State.DEAD or amount <= 0.0:
 		return false
 
+	if health > _max_health:
+		_max_health = health
 	health -= amount
 	if health <= 0.0:
 		_enter_dead_state()
 		return true
 
-	_hurt_anim_timer = _hurt_anim_duration
+	_show_hp_bar()
+	_hurt_anim_timer = 0.28 if (body_sprite and body_sprite.vframes >= 6) else _hurt_anim_duration
 	if body_sprite:
-		body_sprite.frame_coords = Vector2i(0, ENEMY_ROW_HURT)
-	_flash_hit()
+		var is_six_row := body_sprite.vframes >= 6
+		body_sprite.frame_coords = Vector2i(0, 3 if is_six_row else ENEMY_ROW_HURT)
+		if not is_six_row:
+			_flash_hit()
+	else:
+		_flash_hit()
 	return false
 
 
@@ -516,6 +573,9 @@ func _enter_dead_state() -> void:
 		shot_line.visible = false
 	if _target_marker:
 		_target_marker.visible = false
+	if _hp_bar_root:
+		_hp_bar_root.visible = false
+	_hp_bar_timer = 0.0
 
 	died.emit()
 
@@ -531,17 +591,23 @@ func _enter_dead_state() -> void:
 
 	if is_inside_tree():
 		if body_sprite:
-			body_sprite.frame_coords = Vector2i(0, ENEMY_ROW_DEATH)
-			body_sprite.modulate = Color(1.6, 0.55, 0.55, 1.0)
-			# Інерційний зсув тіла назад під час падіння під власною вагою
-			var fall_tween := create_tween()
-			fall_tween.set_parallel(true)
-			fall_tween.tween_property(body_sprite, "position", Vector2(16.0, 8.0), 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-			fall_tween.tween_property(body_sprite, "modulate", Color(0.75, 0.65, 0.65, 1.0), 0.28)
+			var is_six_row := body_sprite.vframes >= 6
+			body_sprite.frame_coords = Vector2i(0, 4 if is_six_row else ENEMY_ROW_DEATH)
+			if is_six_row:
+				body_sprite.modulate = Color.WHITE
+				var fall_tween := create_tween()
+				fall_tween.tween_property(body_sprite, "position", Vector2(10.0, 4.0), 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			else:
+				body_sprite.modulate = Color(1.6, 0.55, 0.55, 1.0)
+				# Інерційний зсув тіла назад під час падіння під власною вагою
+				var fall_tween := create_tween()
+				fall_tween.set_parallel(true)
+				fall_tween.tween_property(body_sprite, "position", Vector2(16.0, 8.0), 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+				fall_tween.tween_property(body_sprite, "modulate", Color(0.75, 0.65, 0.65, 1.0), 0.28)
 
 			var cleanup_tween := create_tween()
-			cleanup_tween.tween_interval(1.15)
-			cleanup_tween.tween_property(self, "modulate:a", 0.0, 0.35)
+			cleanup_tween.tween_interval(1.35)
+			cleanup_tween.tween_property(self, "modulate:a", 0.0, 0.25)
 			cleanup_tween.tween_callback(queue_free)
 		else:
 			var tween := create_tween()
@@ -677,3 +743,70 @@ func _create_target_marker() -> void:
 		pts.append(Vector2(cos(angle) * 20.0, sin(angle) * 7.0))
 	_target_marker.polygon = pts
 	add_child(_target_marker)
+
+
+func _create_hp_bar() -> void:
+	_hp_bar_root = Node2D.new()
+	_hp_bar_root.position = Vector2(0.0, -56.0)
+	_hp_bar_root.z_index = 20
+	_hp_bar_root.visible = false
+	add_child(_hp_bar_root)
+
+	var half_w := HP_BAR_WIDTH * 0.5
+	var half_h := HP_BAR_HEIGHT * 0.5
+
+	# Напівпрозора темна тінь знизу-справа (точно як на скріншоті)
+	var bar_shadow := Polygon2D.new()
+	bar_shadow.color = Color(0.0, 0.0, 0.0, 0.42)
+	bar_shadow.position = Vector2(1.8, 1.8)
+	bar_shadow.polygon = PackedVector2Array([
+		Vector2(-half_w, -half_h),
+		Vector2(half_w, -half_h),
+		Vector2(half_w, half_h),
+		Vector2(-half_w, half_h),
+	])
+	_hp_bar_root.add_child(bar_shadow)
+
+	# Чорна підкладка шкали HP
+	var bar_bg := Polygon2D.new()
+	bar_bg.color = Color(0.05, 0.05, 0.05, 0.96)
+	bar_bg.polygon = PackedVector2Array([
+		Vector2(-half_w, -half_h),
+		Vector2(half_w, -half_h),
+		Vector2(half_w, half_h),
+		Vector2(-half_w, half_h),
+	])
+	_hp_bar_root.add_child(bar_bg)
+
+	# Яскраво-червоне заповнення HP (масштабується зліва направо)
+	_hp_bar_fill = Polygon2D.new()
+	_hp_bar_fill.color = Color(0.95, 0.08, 0.08, 1.0)
+	_hp_bar_fill.position = Vector2(-half_w, 0.0)
+	_hp_bar_fill.polygon = PackedVector2Array([
+		Vector2(0.0, -half_h),
+		Vector2(HP_BAR_WIDTH, -half_h),
+		Vector2(HP_BAR_WIDTH, half_h),
+		Vector2(0.0, half_h),
+	])
+	_hp_bar_root.add_child(_hp_bar_fill)
+
+
+func _show_hp_bar() -> void:
+	if _hp_bar_root == null or _hp_bar_fill == null:
+		return
+	var ratio := clampf(health / maxf(_max_health, 1.0), 0.0, 1.0)
+	_hp_bar_fill.scale.x = ratio
+	_hp_bar_timer = HP_BAR_SHOW_DURATION
+	_hp_bar_root.visible = true
+	_hp_bar_root.modulate.a = 1.0
+
+
+func _update_hp_bar(delta: float) -> void:
+	if _hp_bar_timer <= 0.0 or _hp_bar_root == null:
+		return
+	_hp_bar_timer -= delta
+	if _hp_bar_timer <= 0.0:
+		_hp_bar_timer = 0.0
+		_hp_bar_root.visible = false
+	elif _hp_bar_timer < 0.12:
+		_hp_bar_root.modulate.a = clampf(_hp_bar_timer / 0.12, 0.0, 1.0)

@@ -10,6 +10,7 @@ size = Vector2(58, 98)
 [node name="Enemy" type="CharacterBody2D" unique_id=355634528]
 collision_mask = 0
 script = ExtResource("1_enemy")
+speed = 115.0
 projectile_speed = 540.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1091257786]
@@ -25,7 +26,7 @@ scale = Vector2(0.48, 0.48)
 texture = ExtResource("2_enemy_sheet")
 offset = Vector2(-22, -6)
 hframes = 12
-vframes = 4
+vframes = 6
 
 [node name="ShotLine" type="Line2D" parent="." unique_id=191100203]
 top_level = true
