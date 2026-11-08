@@ -18,6 +18,7 @@ enum Phase {
 }
 
 const BLADE_TEX := preload("res://assets/heli_blade.png")
+const HELI_VOICE_STREAM := preload("res://assets/heli_voice.mp3")
 const TRENCH_X := 185.0
 const TRENCH_TILES_Y: Array[float] = [395.0, 495.0, 595.0]
 
@@ -78,6 +79,7 @@ var _swirl: Node2D
 var _ground_shadow: Polygon2D
 var _rotor_sound: AudioStreamPlayer
 var _rocket_sound: AudioStreamPlayer
+var _voice_sound: AudioStreamPlayer = null
 
 
 func setup(p_troops: Array[String]) -> void:
@@ -93,6 +95,11 @@ func _ready() -> void:
 	_swirl = $Visual/Swirl
 	_rotor_sound = get_node_or_null("RotorSound")
 	_rocket_sound = get_node_or_null("RocketLaunchSound")
+
+	_voice_sound = AudioStreamPlayer.new()
+	_voice_sound.stream = HELI_VOICE_STREAM
+	_voice_sound.volume_db = 2.5
+	add_child(_voice_sound)
 
 	if _rotor_sound:
 		_rotor_sound.volume_db = -24.0
@@ -211,8 +218,10 @@ func _process_drop(delta: float) -> void:
 			_last_land_time = _phase_time + slide_time
 	elif _phase_time >= _last_land_time + 0.45:
 		_rockets_fired = 0
-		_rocket_timer = 0.25
+		_rocket_timer = 1.95
 		_last_targeted_tile_idx = -1
+		if _voice_sound:
+			_voice_sound.play()
 		_set_phase(Phase.ROCKET_ATTACK)
 
 
@@ -223,7 +232,7 @@ func _process_rocket_attack(delta: float) -> void:
 			_rocket_timer = rocket_interval
 			_fire_next_rocket()
 			_rockets_fired += 1
-	elif _phase_time >= float(rocket_count) * rocket_interval + 0.55:
+	elif _phase_time >= 1.95 + float(rocket_count - 1) * rocket_interval + 0.65:
 		_set_phase(Phase.ASCEND)
 
 
