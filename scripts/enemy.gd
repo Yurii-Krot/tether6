@@ -36,6 +36,8 @@ const TILE_HALF_WIDTH := 42.0
 @export var is_stationary := false
 @export var use_sniper_laser := false
 @export var use_trench_tile_launcher := false
+@export var trench_launcher_rocket_count := 1
+@export var is_boss := false
 
 var state: State = State.ADVANCE
 var _max_health := 80.0
@@ -46,8 +48,10 @@ var _shot_visual_timer := 0.0
 var _base_color := Color.WHITE
 var _has_locked_aim := false
 var _locked_aim_pos := Vector2.ZERO
+var _locked_aim_positions: Array[Vector2] = []
 var _target_marker: Polygon2D = null
 var _trench_warning_node: Node2D = null
+var _trench_warning_nodes: Array[Node2D] = []
 var _beep_player: AudioStreamPlayer = null
 var _hp_bar_root: Node2D = null
 var _hp_bar_fill: Polygon2D = null
@@ -143,6 +147,9 @@ func _physics_process(delta: float) -> void:
 	_update_hp_bar(delta)
 	if _trench_warning_node and is_instance_valid(_trench_warning_node):
 		_trench_warning_node.queue_redraw()
+	for wn in _trench_warning_nodes:
+		if wn != null and is_instance_valid(wn):
+			wn.queue_redraw()
 
 	if _rappel_active and state != State.DEAD:
 		_process_rappel(delta)
@@ -361,9 +368,16 @@ func _update_sprite_animation(delta: float) -> void:
 	else:
 		# У режимі атаки між пострілами тримає бойову стійку
 		if shadow:
-			shadow.scale = Vector2.ONE
+			shadow.scale = Vector2(2.24, 2.24) if is_boss else Vector2.ONE
 		if is_six_row:
 			body_sprite.frame_coords = Vector2i(0, row_shoot)
+			if is_boss:
+				var breathe := sin(_anim_time * 3.4)
+				body_sprite.position = Vector2(0.0, breathe * 2.2)
+				body_sprite.scale = Vector2(
+					_base_sprite_scale.x * (1.0 + breathe * 0.014),
+					_base_sprite_scale.y * (1.0 - breathe * 0.014)
+				)
 		else:
 			var ready_col := (cols - 2) + (int(_anim_time * 3.5) % 2)
 			body_sprite.frame_coords = Vector2i(ready_col, row_shoot)
@@ -389,7 +403,7 @@ func _process_attack(delta: float) -> void:
 		if use_sniper_laser:
 			muzzle_offset = Vector2(-114.0, -8.0)
 		elif use_trench_tile_launcher:
-			muzzle_offset = Vector2(-82.0, -5.0)
+			muzzle_offset = Vector2(-144.0, -9.0) if is_boss else Vector2(-82.0, -5.0)
 		elif shoot_straight or burst_count > 1:
 			muzzle_offset = Vector2(-104.0, -9.0)
 		elif pellet_count > 1:
@@ -414,9 +428,10 @@ func _process_attack(delta: float) -> void:
 
 	if not shoot_straight and _attack_timer <= lock_window and _attack_timer > 0.0 and not _has_locked_aim:
 		if use_trench_tile_launcher:
-			_locked_aim_pos = _choose_trench_tile_target()
+			_locked_aim_positions = _choose_trench_tile_targets(maxi(trench_launcher_rocket_count, 1))
+			_locked_aim_pos = _locked_aim_positions[0] if not _locked_aim_positions.is_empty() else _choose_trench_tile_target()
 			_has_locked_aim = true
-			_spawn_trench_tile_warning(_locked_aim_pos)
+			_spawn_trench_tile_warnings(_locked_aim_positions)
 			if _beep_player:
 				_beep_player.play()
 		else:
@@ -456,14 +471,18 @@ func _perform_attack(muzzle_pos: Vector2) -> void:
 		shot_sound.play()
 
 	if use_trench_tile_launcher:
-		var tile_target := _locked_aim_pos if _has_locked_aim else _choose_trench_tile_target()
+		var targets := _locked_aim_positions if (_has_locked_aim and not _locked_aim_positions.is_empty()) else _choose_trench_tile_targets(maxi(trench_launcher_rocket_count, 1))
 		var parent_node := get_parent()
 		if parent_node != null:
-			var rocket: Node2D = GRENADIER_ROCKET_SCRIPT.new()
-			var warn_to_pass := _trench_warning_node
+			for i in range(targets.size()):
+				var rocket: Node2D = GRENADIER_ROCKET_SCRIPT.new()
+				var warn_to_pass: Node2D = null
+				if i < _trench_warning_nodes.size():
+					warn_to_pass = _trench_warning_nodes[i]
+				rocket.setup(muzzle_pos, targets[i], projectile_speed, attack_damage, warn_to_pass)
+				parent_node.add_child(rocket)
+			_trench_warning_nodes.clear()
 			_trench_warning_node = null
-			rocket.setup(muzzle_pos, tile_target, projectile_speed, attack_damage, warn_to_pass)
-			parent_node.add_child(rocket)
 		return
 
 	var target_pos: Vector2
@@ -620,6 +639,10 @@ func _enter_dead_state() -> void:
 	if _trench_warning_node and is_instance_valid(_trench_warning_node):
 		_trench_warning_node.queue_free()
 		_trench_warning_node = null
+	for wn in _trench_warning_nodes:
+		if wn != null and is_instance_valid(wn):
+			wn.queue_free()
+	_trench_warning_nodes.clear()
 	if _beep_player and _beep_player.playing:
 		_beep_player.stop()
 	if _hp_bar_root:
@@ -807,14 +830,16 @@ func _create_target_marker() -> void:
 
 
 func _create_hp_bar() -> void:
+	var bar_w := 132.0 if is_boss else HP_BAR_WIDTH
+	var bar_h := 11.0 if is_boss else HP_BAR_HEIGHT
 	_hp_bar_root = Node2D.new()
-	_hp_bar_root.position = Vector2(0.0, -70.0)
+	_hp_bar_root.position = Vector2(0.0, -124.0 if is_boss else -70.0)
 	_hp_bar_root.z_index = 20
-	_hp_bar_root.visible = false
+	_hp_bar_root.visible = is_boss
 	add_child(_hp_bar_root)
 
-	var half_w := HP_BAR_WIDTH * 0.5
-	var half_h := HP_BAR_HEIGHT * 0.5
+	var half_w := bar_w * 0.5
+	var half_h := bar_h * 0.5
 
 	# Напівпрозора темна тінь знизу-справа (точно як на скріншоті)
 	var bar_shadow := Polygon2D.new()
@@ -845,8 +870,8 @@ func _create_hp_bar() -> void:
 	_hp_bar_fill.position = Vector2(-half_w, 0.0)
 	_hp_bar_fill.polygon = PackedVector2Array([
 		Vector2(0.0, -half_h),
-		Vector2(HP_BAR_WIDTH, -half_h),
-		Vector2(HP_BAR_WIDTH, half_h),
+		Vector2(bar_w, -half_h),
+		Vector2(bar_w, half_h),
 		Vector2(0.0, half_h),
 	])
 	_hp_bar_root.add_child(_hp_bar_fill)
@@ -857,12 +882,16 @@ func _show_hp_bar() -> void:
 		return
 	var ratio := clampf(health / maxf(_max_health, 1.0), 0.0, 1.0)
 	_hp_bar_fill.scale.x = ratio
-	_hp_bar_timer = HP_BAR_SHOW_DURATION
+	_hp_bar_timer = 15.0 if is_boss else HP_BAR_SHOW_DURATION
 	_hp_bar_root.visible = true
 	_hp_bar_root.modulate.a = 1.0
 
 
 func _update_hp_bar(delta: float) -> void:
+	if is_boss and state != State.DEAD and _hp_bar_root != null:
+		_hp_bar_root.visible = true
+		_hp_bar_root.modulate.a = 1.0
+		return
 	if _hp_bar_timer <= 0.0 or _hp_bar_root == null:
 		return
 	_hp_bar_timer -= delta
@@ -874,21 +903,47 @@ func _update_hp_bar(delta: float) -> void:
 
 
 func _choose_trench_tile_target() -> Vector2:
+	var targets := _choose_trench_tile_targets(1)
+	return targets[0]
+
+
+func _choose_trench_tile_targets(count: int) -> Array[Vector2]:
 	var tx := _get_trench_x()
+	var total_tiles := TRENCH_TILES_Y.size()
+	var wanted := clampi(count, 1, total_tiles)
+	var chosen_indices: Array[int] = []
+
 	var p := _find_player()
 	if p != null and not p.get("is_dead"):
 		var best_idx := 1
 		var best_dist := INF
-		for i in range(TRENCH_TILES_Y.size()):
+		for i in range(total_tiles):
 			var d := absf(p.global_position.y - TRENCH_TILES_Y[i])
 			if d < best_dist:
 				best_dist = d
 				best_idx = i
-		return Vector2(tx, TRENCH_TILES_Y[best_idx])
-	return Vector2(tx, TRENCH_TILES_Y[randi() % TRENCH_TILES_Y.size()])
+		chosen_indices.append(best_idx)
+
+	var remaining_indices: Array[int] = []
+	for i in range(total_tiles):
+		if not chosen_indices.has(i):
+			remaining_indices.append(i)
+	remaining_indices.shuffle()
+
+	while chosen_indices.size() < wanted and not remaining_indices.is_empty():
+		chosen_indices.append(remaining_indices.pop_front())
+
+	var result: Array[Vector2] = []
+	for idx in chosen_indices:
+		result.append(Vector2(tx, TRENCH_TILES_Y[idx]))
+	return result
 
 
-func _spawn_trench_tile_warning(tile_pos: Vector2) -> void:
+func _spawn_trench_tile_warnings(tile_positions: Array[Vector2]) -> void:
+	for wn in _trench_warning_nodes:
+		if wn != null and is_instance_valid(wn):
+			wn.queue_free()
+	_trench_warning_nodes.clear()
 	if _trench_warning_node and is_instance_valid(_trench_warning_node):
 		_trench_warning_node.queue_free()
 		_trench_warning_node = null
@@ -897,15 +952,17 @@ func _spawn_trench_tile_warning(tile_pos: Vector2) -> void:
 	if parent_node == null:
 		return
 
-	_trench_warning_node = Node2D.new()
-	_trench_warning_node.global_position = tile_pos
-	_trench_warning_node.z_index = 3
-	_trench_warning_node.draw.connect(_draw_trench_tile_warning)
-	parent_node.add_child(_trench_warning_node)
+	for tile_pos in tile_positions:
+		var warn := Node2D.new()
+		warn.global_position = tile_pos
+		warn.z_index = 3
+		warn.draw.connect(_draw_single_trench_warning.bind(warn))
+		parent_node.add_child(warn)
+		_trench_warning_nodes.append(warn)
 
 
-func _draw_trench_tile_warning() -> void:
-	if _trench_warning_node == null or not is_instance_valid(_trench_warning_node):
+func _draw_single_trench_warning(warn_node: Node2D) -> void:
+	if warn_node == null or not is_instance_valid(warn_node):
 		return
 	# Швидке мигання попереджувальної мітки в окопі під час 0.3 с звуку "пі-пі-пі"
 	var pulse := 0.5 + 0.5 * sin(_anim_time * 52.0)
@@ -917,14 +974,18 @@ func _draw_trench_tile_warning() -> void:
 		TILE_HALF_WIDTH * 2.0,
 		(TILE_HALF_HEIGHT - 4.0) * 2.0
 	)
-	_trench_warning_node.draw_rect(rect, Color(1.0, 0.16, 0.08, alpha * 0.48), true)
-	_trench_warning_node.draw_rect(rect, Color(1.0, 0.35, 0.12, alpha), false, 2.6)
-	_trench_warning_node.draw_arc(Vector2.ZERO, lerpf(24.0, 14.0, pulse), 0.0, TAU, 24, Color(1.0, 0.90, 0.25, alpha), 2.2)
-	_trench_warning_node.draw_line(Vector2(-15.0, 0.0), Vector2(15.0, 0.0), Color(1.0, 0.25, 0.12, alpha), 2.2)
-	_trench_warning_node.draw_line(Vector2(0.0, -15.0), Vector2(0.0, 15.0), Color(1.0, 0.25, 0.12, alpha), 2.2)
+	warn_node.draw_rect(rect, Color(1.0, 0.16, 0.08, alpha * 0.48), true)
+	warn_node.draw_rect(rect, Color(1.0, 0.35, 0.12, alpha), false, 2.6)
+	warn_node.draw_arc(Vector2.ZERO, lerpf(24.0, 14.0, pulse), 0.0, TAU, 24, Color(1.0, 0.90, 0.25, alpha), 2.2)
+	warn_node.draw_line(Vector2(-15.0, 0.0), Vector2(15.0, 0.0), Color(1.0, 0.25, 0.12, alpha), 2.2)
+	warn_node.draw_line(Vector2(0.0, -15.0), Vector2(0.0, 15.0), Color(1.0, 0.25, 0.12, alpha), 2.2)
 
 
 func _exit_tree() -> void:
 	if _trench_warning_node and is_instance_valid(_trench_warning_node):
 		_trench_warning_node.queue_free()
 		_trench_warning_node = null
+	for wn in _trench_warning_nodes:
+		if wn != null and is_instance_valid(wn):
+			wn.queue_free()
+	_trench_warning_nodes.clear()

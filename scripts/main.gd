@@ -2,6 +2,7 @@ extends Node2D
 
 const GAME_STATE := preload("res://scripts/game_state.gd")
 const BATTLE_BGM_STREAM := preload("res://assets/battle_bgm.mp3")
+const BOSS_BGM_STREAM := preload("res://assets/boss_bgm.mp3")
 const UPGRADE_SCENE_PATH := "res://scenes/upgrade_menu.tscn"
 const MAIN_MENU_SCENE_PATH := "res://scenes/main_menu.tscn"
 const PROGRESS_TRACK_WIDTH := 356.0
@@ -36,6 +37,7 @@ func _ready() -> void:
 
 	wave_manager.wave_started.connect(_on_wave_started)
 	wave_manager.subwave_changed.connect(_on_subwave_changed)
+	wave_manager.boss_fight_started.connect(_on_boss_fight_started)
 	wave_manager.wave_cleared.connect(_on_wave_cleared)
 	wave_manager.all_waves_cleared.connect(_on_all_waves_cleared)
 	wave_manager.enemy_killed.connect(_on_enemy_killed)
@@ -196,12 +198,16 @@ func _update_progress_bar(delta: float) -> void:
 	if _progress_title_label:
 		var rem := wave_manager.get_remaining_enemies_count()
 		var pct := int(roundf(_displayed_progress * 100.0))
-		_progress_title_label.text = "ДО КІНЦЯ РІВНЯ: %d%%  |  Хвиля %d/%d  |  Ворогів: %d" % [
-			pct,
-			wave_manager.current_subwave,
-			wave_manager.total_subwaves,
-			rem
-		]
+		if wave_manager.is_boss_fight_active():
+			_progress_title_label.text = "БОС-ФАЙТ!  |  Ворогів на полі: %d" % rem
+			_progress_fill.color = Color(0.95, 0.22, 0.18, 0.96)
+		else:
+			_progress_title_label.text = "ДО КІНЦЯ РІВНЯ: %d%%  |  Хвиля %d/%d  |  Ворогів: %d" % [
+				pct,
+				wave_manager.current_subwave,
+				wave_manager.total_subwaves,
+				rem
+			]
 
 
 func _update_hud() -> void:
@@ -220,6 +226,31 @@ func _on_wave_started(_wave_number: int) -> void:
 
 func _on_subwave_changed(_subwave_num: int, _total_subwaves: int) -> void:
 	_update_hud()
+
+
+func _on_boss_fight_started() -> void:
+	if _game_over:
+		return
+	_switch_to_boss_bgm()
+	banner_label.modulate = Color(1.0, 0.32, 0.24, 1.0)
+	banner_label.text = "УВАГА! БОС ВИХОДИТЬ НА ПОЛЕ БОЮ!"
+	var t := create_tween()
+	t.tween_interval(2.2)
+	t.tween_callback(func() -> void:
+		if not _game_over and banner_label:
+			banner_label.text = ""
+	)
+
+
+func _switch_to_boss_bgm() -> void:
+	var boss_stream: AudioStream = BOSS_BGM_STREAM
+	if boss_stream is AudioStreamMP3:
+		(boss_stream as AudioStreamMP3).loop = true
+	if _bgm_player != null and is_instance_valid(_bgm_player):
+		_bgm_player.stop()
+		_bgm_player.stream = boss_stream
+		_bgm_player.volume_db = -8.0
+		_bgm_player.play()
 
 
 func _on_enemy_killed(_unit_type: String, world_pos: Vector2, reward: int) -> void:

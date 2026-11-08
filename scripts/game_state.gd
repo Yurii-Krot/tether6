@@ -25,8 +25,8 @@ const LEVEL_DATA: Array[Dictionary] = [
 	{"infantry": 16, "shotgun": 4, "heavy": 3, "grenadier": 2, "snipers": 3, "heli": 1, "heli_troops": 3, "spawn_interval": 1.68, "reward": 95},
 	# Рівень 4: 4 червоні важкі кулеметники + строї з 5 бійців
 	{"infantry": 18, "shotgun": 5, "heavy": 4, "grenadier": 3, "snipers": 3, "heli": 0, "heli_troops": 0, "spawn_interval": 1.62, "reward": 110},
-	# Рівень 5: вертоліт + 4 червоні кулеметники + гранатометники + снайпери
-	{"infantry": 20, "shotgun": 6, "heavy": 4, "grenadier": 3, "snipers": 3, "heli": 1, "heli_troops": 4, "spawn_interval": 1.56, "reward": 130},
+	# Рівень 5: вертоліт + 4 червоні кулеметники + гранатометники + снайпери + БОС В КІНЦІ ХВИЛІ
+	{"infantry": 20, "shotgun": 6, "heavy": 4, "grenadier": 3, "snipers": 3, "heli": 1, "heli_troops": 4, "has_boss": true, "spawn_interval": 1.56, "reward": 200},
 	# Рівень 6: інтенсивний штурм дробовиків, 5 кулеметників та піхоти у строях V і в лінію
 	{"infantry": 22, "shotgun": 7, "heavy": 5, "grenadier": 4, "snipers": 4, "heli": 1, "heli_troops": 4, "spawn_interval": 1.50, "reward": 150},
 	# Рівень 7: посилені хвилі з 5 кулеметниками та гранатометниками
@@ -125,6 +125,8 @@ static func buy_upgrade(upg_key: String) -> bool:
 static func get_kill_reward(unit_type: String) -> int:
 	var base_reward := 12
 	match unit_type:
+		"boss":
+			base_reward = 250
 		"sniper":
 			base_reward = 25
 		"heavy":

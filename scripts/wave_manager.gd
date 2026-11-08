@@ -6,6 +6,7 @@ const GAME_STATE := preload("res://scripts/game_state.gd")
 signal wave_started(wave_number: int)
 signal subwave_changed(subwave_number: int, total_subwaves: int)
 signal formation_spawned(unit_type: String, is_v_shape: bool)
+signal boss_fight_started
 signal wave_cleared
 signal all_waves_cleared
 signal enemy_killed(unit_type: String, world_pos: Vector2, reward: int)
@@ -14,6 +15,7 @@ signal enemy_killed(unit_type: String, world_pos: Vector2, reward: int)
 @export var shotgunner_scene: PackedScene = preload("res://scenes/shotgunner.tscn")
 @export var heavy_gunner_scene: PackedScene = preload("res://scenes/heavy_gunner.tscn")
 @export var grenadier_scene: PackedScene = preload("res://scenes/grenadier.tscn")
+@export var boss_grenadier_scene: PackedScene = preload("res://scenes/boss_grenadier.tscn")
 @export var sniper_scene: PackedScene = preload("res://scenes/sniper.tscn")
 @export var helicopter_scene: PackedScene = preload("res://scenes/helicopter.tscn")
 @export var spawn_interval := 2.3
@@ -52,9 +54,14 @@ var _spawn_queue: Array[String] = []
 var _alive_enemies: Dictionary = {}
 var _rewarded_enemies: Dictionary = {}
 var _wave_in_progress := false
+var _has_boss_fight := false
+var _boss_spawned := false
+var _boss_fight_active := false
+var _boss_instance_id := -1
 
 var _spawn_timer: Timer
 var _wave_delay_timer: Timer
+var _boss_minion_timer: Timer
 
 
 func _ready() -> void:
@@ -75,6 +82,13 @@ func _ready() -> void:
 	_wave_delay_timer.one_shot = true
 	_wave_delay_timer.timeout.connect(_start_next_wave)
 	add_child(_wave_delay_timer)
+
+	_boss_minion_timer = Timer.new()
+	_boss_minion_timer.name = "BossMinionTimer"
+	_boss_minion_timer.wait_time = 3.8
+	_boss_minion_timer.one_shot = false
+	_boss_minion_timer.timeout.connect(_on_boss_minion_timer_timeout)
+	add_child(_boss_minion_timer)
 
 	if auto_start:
 		call_deferred("start_waves")
@@ -98,7 +112,16 @@ func get_alive_enemy_count() -> int:
 
 
 func get_remaining_enemies_count() -> int:
-	return maxi(total_enemy_soldiers - killed_enemy_soldiers, 0)
+	if _boss_fight_active:
+		return _alive_enemies.size()
+	var base_rem := maxi(total_enemy_soldiers - killed_enemy_soldiers, 0)
+	if _has_boss_fight and not _boss_spawned:
+		return base_rem + 1
+	return base_rem
+
+
+func is_boss_fight_active() -> bool:
+	return _boss_fight_active
 
 
 func get_level_progress_ratio() -> float:
@@ -106,9 +129,14 @@ func get_level_progress_ratio() -> float:
 		return 0.0
 	if not _wave_in_progress and _spawn_queue.is_empty() and _alive_enemies.is_empty() and eliminated_level_units > 0:
 		return 1.0
+	if _boss_fight_active:
+		return 0.96
 	var spawned_frac := clampf(float(spawned_level_units) / float(total_level_units), 0.0, 1.0)
 	var killed_frac := clampf(float(eliminated_level_units) / float(total_level_units), 0.0, 1.0)
-	return clampf(killed_frac * 0.72 + spawned_frac * 0.28, 0.0, 1.0)
+	var raw_prog := clampf(killed_frac * 0.72 + spawned_frac * 0.28, 0.0, 1.0)
+	if _has_boss_fight and not _boss_spawned:
+		return raw_prog * 0.92
+	return raw_prog
 
 
 func _start_next_wave() -> void:
@@ -121,6 +149,10 @@ func _start_next_wave() -> void:
 	spawned_level_units = 0
 	eliminated_level_units = 0
 	killed_enemy_soldiers = 0
+	_boss_spawned = false
+	_boss_fight_active = false
+	_boss_instance_id = -1
+	_has_boss_fight = bool(waves[current_wave_index].get("has_boss", false)) or (GAME_STATE.current_level == 5)
 	_spawn_queue = _build_wave_queue(waves[current_wave_index])
 	wave_started.emit(current_wave_index + 1)
 	subwave_changed.emit(current_subwave, total_subwaves)
@@ -335,6 +367,8 @@ func _spawn_five_formation(unit_type: String, is_v_shape: bool) -> void:
 
 func _get_scene_for_type(unit_type: String) -> PackedScene:
 	match unit_type:
+		"boss":
+			return boss_grenadier_scene
 		"sniper":
 			return sniper_scene
 		"heavy":
@@ -346,26 +380,33 @@ func _get_scene_for_type(unit_type: String) -> PackedScene:
 	return enemy_scene
 
 
-func _register_unit(unit: Node2D, unit_type: String = "infantry") -> void:
-	spawned_level_units += 1
-	var hp_mult := GAME_STATE.get_enemy_hp_multiplier(maxi(current_wave_index, 0))
-	if "health" in unit:
-		unit.health = roundf(float(unit.health) * hp_mult)
+func _register_unit(unit: Node2D, unit_type: String = "infantry", count_toward_level_total: bool = true) -> void:
+	if count_toward_level_total:
+		spawned_level_units += 1
+	if unit_type == "boss":
+		# ХП боса розраховано рівно на ~150 пострілів гвинтівки головного героя
+		if "health" in unit:
+			unit.health = roundf(150.0 * GAME_STATE.get_player_bullet_damage())
+	else:
+		var hp_mult := GAME_STATE.get_enemy_hp_multiplier(maxi(current_wave_index, 0))
+		if "health" in unit:
+			unit.health = roundf(float(unit.health) * hp_mult)
 	var id := unit.get_instance_id()
 	_alive_enemies[id] = true
 	if unit.has_signal("died"):
-		unit.connect("died", _on_unit_died.bind(id, unit, unit_type), CONNECT_ONE_SHOT)
-	unit.tree_exited.connect(_on_enemy_eliminated.bind(id), CONNECT_ONE_SHOT)
+		unit.connect("died", _on_unit_died.bind(id, unit, unit_type, count_toward_level_total), CONNECT_ONE_SHOT)
+	unit.tree_exited.connect(_on_enemy_eliminated.bind(id, count_toward_level_total), CONNECT_ONE_SHOT)
 
 
-func _on_unit_died(instance_id: int, unit: Node2D, unit_type: String) -> void:
+func _on_unit_died(instance_id: int, unit: Node2D, unit_type: String, count_toward_level_total: bool = true) -> void:
 	if not _rewarded_enemies.has(instance_id):
 		_rewarded_enemies[instance_id] = true
-		killed_enemy_soldiers += 1
+		if count_toward_level_total:
+			killed_enemy_soldiers += 1
 		var pos := unit.global_position if is_instance_valid(unit) else Vector2(640.0, 480.0)
 		var reward := GAME_STATE.get_kill_reward(unit_type)
 		enemy_killed.emit(unit_type, pos, reward)
-	_on_enemy_eliminated(instance_id)
+	_on_enemy_eliminated(instance_id, count_toward_level_total)
 
 
 func _spawn_helicopter() -> void:
@@ -411,12 +452,79 @@ func _on_heli_trooper_drop(unit_type: String, from_pos: Vector2, land_pos: Vecto
 		unit.global_position = land_pos
 
 
-func _on_enemy_eliminated(instance_id: int) -> void:
+func _on_enemy_eliminated(instance_id: int, count_toward_level_total: bool = true) -> void:
 	if not _alive_enemies.has(instance_id):
 		return
 	_alive_enemies.erase(instance_id)
-	eliminated_level_units += 1
+	if count_toward_level_total:
+		eliminated_level_units += 1
+	if instance_id == _boss_instance_id:
+		_boss_fight_active = false
+		if _boss_minion_timer:
+			_boss_minion_timer.stop()
 	_check_wave_cleared()
+
+
+func _start_boss_fight() -> void:
+	_boss_spawned = true
+	_boss_fight_active = true
+	boss_fight_started.emit()
+
+	if boss_grenadier_scene != null:
+		var boss := boss_grenadier_scene.instantiate() as Node2D
+		if boss != null:
+			boss.global_position = Vector2(infantry_spawn_x + 35.0, 485.0)
+			if boss.has_method("set_custom_stop_x"):
+				boss.set_custom_stop_x(915.0)
+			_register_unit(boss, "boss", false)
+			_boss_instance_id = boss.get_instance_id()
+			var container := get_parent() if get_parent() != null else get_tree().current_scene
+			container.add_child(boss)
+
+	if _boss_minion_timer:
+		_boss_minion_timer.start(3.6)
+
+
+func _on_boss_minion_timer_timeout() -> void:
+	if not _boss_fight_active or not _alive_enemies.has(_boss_instance_id):
+		if _boss_minion_timer:
+			_boss_minion_timer.stop()
+		return
+
+	# Рахуємо скільки звичайних ворогів-помічників зараз на полі (без самого боса). Максимум 3 одночасно!
+	var alive_minions := maxi(_alive_enemies.size() - 1, 0)
+	if alive_minions >= 3:
+		return
+
+	var available_slots := 3 - alive_minions
+	var to_spawn := mini(randi_range(1, 2), available_slots)
+	var minion_types: Array[String] = ["infantry", "shotgun", "heavy", "grenadier", "sniper"]
+	var container := get_parent() if get_parent() != null else get_tree().current_scene
+	if container == null:
+		return
+
+	for i in range(to_spawn):
+		var m_type: String = minion_types[randi() % minion_types.size()]
+		var packed := _get_scene_for_type(m_type)
+		if packed == null:
+			continue
+		var unit := packed.instantiate() as Node2D
+		if unit == null:
+			continue
+
+		if m_type == "sniper":
+			var slot := _sniper_spawn_idx % 6
+			_sniper_spawn_idx += 1
+			var slot_x := lerpf(740.0, 1185.0, float(slot) / 5.0) + randf_range(-20.0, 20.0)
+			var slot_y := lerpf(sniper_y_min, sniper_y_max, float((slot * 3) % 5) / 4.0) + randf_range(-5.0, 5.0)
+			unit.global_position = Vector2(clampf(slot_x, 725.0, 1210.0), clampf(slot_y, 165.0, 230.0))
+		elif m_type == "heavy":
+			unit.global_position = Vector2(infantry_spawn_x + float(i) * 32.0, randf_range(390.0, 585.0))
+		else:
+			unit.global_position = Vector2(infantry_spawn_x + float(i) * 32.0, randf_range(spawn_y_min, spawn_y_max))
+
+		_register_unit(unit, m_type, false)
+		container.add_child(unit)
 
 
 func _check_wave_cleared() -> void:
@@ -427,8 +535,14 @@ func _check_wave_cleared() -> void:
 	if not _spawn_queue.is_empty() or not _alive_enemies.is_empty():
 		return
 
+	if _has_boss_fight and not _boss_spawned:
+		_start_boss_fight()
+		return
+
 	_wave_in_progress = false
 	_spawn_timer.stop()
+	if _boss_minion_timer:
+		_boss_minion_timer.stop()
 	wave_cleared.emit()
 
 	if current_wave_index + 1 < waves.size():
