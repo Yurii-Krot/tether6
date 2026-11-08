@@ -1,7 +1,7 @@
 class_name MainMenu
 extends Control
 
-const GAME_SCENE_PATH := "res://scenes/main.tscn"
+const UPGRADE_SCENE_PATH := "res://scenes/upgrade_menu.tscn"
 
 var _transitioning := false
 var _hover_tween: Tween = null
@@ -87,4 +87,6 @@ func _on_play_pressed() -> void:
 
 
 func _start_game_scene() -> void:
-	get_tree().change_scene_to_file(GAME_SCENE_PATH)
+	if GameState.current_level > GameState.TOTAL_LEVELS or GameState.current_level < 1:
+		GameState.reset_campaign()
+	get_tree().change_scene_to_file(UPGRADE_SCENE_PATH)

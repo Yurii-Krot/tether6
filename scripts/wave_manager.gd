@@ -4,6 +4,7 @@ extends Node
 signal wave_started(wave_number: int)
 signal wave_cleared
 signal all_waves_cleared
+signal enemy_killed(unit_type: String, world_pos: Vector2, reward: int)
 
 @export var enemy_scene: PackedScene = preload("res://scenes/enemy.tscn")
 @export var shotgunner_scene: PackedScene = preload("res://scenes/shotgunner.tscn")
@@ -28,10 +29,12 @@ signal all_waves_cleared
 ]
 
 var _current_heli_troops := 4
+var _sniper_spawn_idx := 0
 
 var current_wave_index := -1
 var _spawn_queue: Array[String] = []
 var _alive_enemies: Dictionary = {}
+var _rewarded_enemies: Dictionary = {}
 var _wave_in_progress := false
 
 var _spawn_timer: Timer
@@ -39,6 +42,10 @@ var _wave_delay_timer: Timer
 
 
 func _ready() -> void:
+	var level_cfg := GameState.get_current_level_data()
+	waves = [level_cfg]
+	spawn_interval = float(level_cfg.get("spawn_interval", spawn_interval))
+
 	_spawn_timer = Timer.new()
 	_spawn_timer.name = "SpawnTimer"
 	_spawn_timer.wait_time = spawn_interval
@@ -59,9 +66,11 @@ func _ready() -> void:
 
 func start_waves() -> void:
 	current_wave_index = -1
+	_sniper_spawn_idx = 0
 	_alive_enemies.clear()
+	_rewarded_enemies.clear()
 	_spawn_queue.clear()
-	_wave_delay_timer.start(1.0)
+	_wave_delay_timer.start(0.8)
 
 
 func get_current_wave_number() -> int:
@@ -108,9 +117,9 @@ func _build_wave_queue(wave_data: Dictionary) -> Array[String]:
 		var h_idx := mini(2 + h * 3, queue.size())
 		queue.insert(h_idx, "heavy")
 
-	# Вставляємо снайпера після перших піхотинців, щоб тримав окоп під прицілом зверху справа
+	# Вставляємо снайперів рівномірно впродовж рівня, щоб тримали окоп під прицілом зверху справа
 	for s in range(sniper_count):
-		var insert_idx := mini(2 + s * 3, queue.size())
+		var insert_idx := mini(1 + s * 2, queue.size())
 		queue.insert(insert_idx, "sniper")
 
 	# Вертоліт з десантом прилітає зліва посеред хвилі
@@ -154,10 +163,12 @@ func _spawn_next_from_queue() -> void:
 		return
 
 	if unit_type == "sniper":
-		unit.global_position = Vector2(
-			randf_range(sniper_x_min, sniper_x_max),
-			randf_range(sniper_y_min, sniper_y_max)
-		)
+		# Розподіляємо снайперів вздовж верхнього пагорба, щоб вони не накладалися один на одного
+		var slot := _sniper_spawn_idx % 6
+		_sniper_spawn_idx += 1
+		var slot_x := lerpf(765.0, 1205.0, float(slot) / 5.0) + randf_range(-24.0, 24.0)
+		var slot_y := lerpf(sniper_y_min, sniper_y_max, float((slot * 3) % 5) / 4.0) + randf_range(-6.0, 6.0)
+		unit.global_position = Vector2(clampf(slot_x, 750.0, 1220.0), clampf(slot_y, 265.0, 326.0))
 	elif unit_type == "heavy":
 		# Важкий кулеметник виходить на лінію окопу (y: 435..615), щоб його пряма черга з 8 червоних куль летіла впоперек окопу
 		unit.global_position = Vector2(
@@ -170,12 +181,7 @@ func _spawn_next_from_queue() -> void:
 			randf_range(spawn_y_min, spawn_y_max)
 		)
 
-	var id := unit.get_instance_id()
-	_alive_enemies[id] = true
-
-	if unit.has_signal("died"):
-		unit.connect("died", _on_enemy_eliminated.bind(id), CONNECT_ONE_SHOT)
-	unit.tree_exited.connect(_on_enemy_eliminated.bind(id), CONNECT_ONE_SHOT)
+	_register_unit(unit, unit_type)
 
 	var container := get_parent() if get_parent() != null else get_tree().current_scene
 	container.add_child(unit)
@@ -192,12 +198,21 @@ func _get_scene_for_type(unit_type: String) -> PackedScene:
 	return enemy_scene
 
 
-func _register_unit(unit: Node) -> void:
+func _register_unit(unit: Node2D, unit_type: String = "infantry") -> void:
 	var id := unit.get_instance_id()
 	_alive_enemies[id] = true
 	if unit.has_signal("died"):
-		unit.connect("died", _on_enemy_eliminated.bind(id), CONNECT_ONE_SHOT)
+		unit.connect("died", _on_unit_died.bind(id, unit, unit_type), CONNECT_ONE_SHOT)
 	unit.tree_exited.connect(_on_enemy_eliminated.bind(id), CONNECT_ONE_SHOT)
+
+
+func _on_unit_died(instance_id: int, unit: Node2D, unit_type: String) -> void:
+	if not _rewarded_enemies.has(instance_id):
+		_rewarded_enemies[instance_id] = true
+		var pos := unit.global_position if is_instance_valid(unit) else Vector2(640.0, 480.0)
+		var reward := GameState.get_kill_reward(unit_type)
+		enemy_killed.emit(unit_type, pos, reward)
+	_on_enemy_eliminated(instance_id)
 
 
 func _spawn_helicopter() -> void:
@@ -233,7 +248,7 @@ func _on_heli_trooper_drop(unit_type: String, from_pos: Vector2, land_pos: Vecto
 	if unit == null:
 		return
 	unit.global_position = from_pos
-	_register_unit(unit)
+	_register_unit(unit, unit_type)
 	var container := get_parent() if get_parent() != null else get_tree().current_scene
 	container.add_child(unit)
 	if unit.has_method("start_rappel"):

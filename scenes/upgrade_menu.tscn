@@ -1,0 +1,205 @@
+[gd_scene load_steps=4 format=3 uid="uid://cupgrademenu01"]
+
+[ext_resource type="Script" path="res://scripts/upgrade_menu.gd" id="1_upg_script"]
+[ext_resource type="Texture2D" path="res://assets/menu_bg.png" id="2_menu_bg"]
+[ext_resource type="Texture2D" path="res://assets/btn_next.png" id="3_btn_next"]
+
+[node name="UpgradeMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_upg_script")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_menu_bg")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="DarkBackdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.06, 0.06, 0.07, 0.78)
+
+[node name="PanelFrame" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -460.0
+offset_top = -275.0
+offset_right = 460.0
+offset_bottom = 195.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.62, 0.53, 0.34, 0.95)
+
+[node name="HeaderBar" type="ColorRect" parent="PanelFrame"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = -6.0
+offset_bottom = 66.0
+grow_horizontal = 2
+color = Color(0.14, 0.14, 0.15, 0.98)
+
+[node name="LevelLabel" type="Label" parent="PanelFrame/HeaderBar"]
+layout_mode = 1
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = 24.0
+offset_top = -20.0
+offset_right = 340.0
+offset_bottom = 20.0
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.92, 0.89, 0.82, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 24
+text = "РІВЕНЬ 1 / 15"
+vertical_alignment = 1
+
+[node name="TitleLabel" type="Label" parent="PanelFrame/HeaderBar"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -180.0
+offset_top = -20.0
+offset_right = 180.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.84, 0.74, 0.48, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 22
+text = "ПОКРАЩЕННЯ"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CoinsLabel" type="Label" parent="PanelFrame/HeaderBar"]
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -320.0
+offset_top = -20.0
+offset_right = -24.0
+offset_bottom = 20.0
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 0.86, 0.32, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 24
+text = "МОНЕТИ: $0"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="BodyBox" type="ColorRect" parent="PanelFrame"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 72.0
+offset_right = -6.0
+offset_bottom = -6.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.18, 0.18, 0.19, 0.97)
+
+[node name="ComingSoonLabel" type="Label" parent="PanelFrame/BodyBox"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -320.0
+offset_top = -54.0
+offset_right = 320.0
+offset_bottom = 26.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.92, 0.88, 0.78, 0.95)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 54
+text = "COMING SOON"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="EarnedLabel" type="Label" parent="PanelFrame/BodyBox"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -260.0
+offset_top = -56.0
+offset_right = 260.0
+offset_bottom = -18.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.68, 0.95, 0.68, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 19
+text = "Зароблено за попередній бій: +$0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NextButton" type="TextureButton" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -450.0
+offset_top = -138.0
+offset_right = -90.0
+offset_bottom = -40.0
+grow_horizontal = 0
+grow_vertical = 0
+pivot_offset = Vector2(180, 49)
+mouse_default_cursor_shape = 2
+texture_normal = ExtResource("3_btn_next")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="FadeOverlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)
