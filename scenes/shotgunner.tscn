@@ -9,11 +9,11 @@ size = Vector2(60, 98)
 [node name="Shotgunner" type="CharacterBody2D" unique_id=191400401]
 collision_mask = 0
 script = ExtResource("1_enemy")
-health = 45.0
+health = 100.0
 speed = 98.0
 stop_distance = 275.0
 attack_interval = 2.1
-attack_damage = 6.0
+attack_damage = 7.0
 projectile_speed = 560.0
 pellet_count = 5
 spread_angle_deg = 28.0

@@ -1,6 +1,7 @@
 class_name MainMenu
 extends Control
 
+const GAME_STATE := preload("res://scripts/game_state.gd")
 const UPGRADE_SCENE_PATH := "res://scenes/upgrade_menu.tscn"
 
 var _transitioning := false
@@ -87,6 +88,6 @@ func _on_play_pressed() -> void:
 
 
 func _start_game_scene() -> void:
-	if GameState.current_level > GameState.TOTAL_LEVELS or GameState.current_level < 1:
-		GameState.reset_campaign()
+	if GAME_STATE.current_level > GAME_STATE.TOTAL_LEVELS or GAME_STATE.current_level < 1:
+		GAME_STATE.reset_campaign()
 	get_tree().change_scene_to_file(UPGRADE_SCENE_PATH)

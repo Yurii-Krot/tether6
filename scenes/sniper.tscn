@@ -10,10 +10,10 @@ size = Vector2(55, 94)
 [node name="Sniper" type="CharacterBody2D" unique_id=191200301]
 collision_mask = 0
 script = ExtResource("1_enemy")
-health = 20.0
+health = 50.0
 speed = 0.0
 attack_interval = 3.5
-attack_damage = 22.0
+attack_damage = 25.0
 projectile_speed = 1650.0
 is_stationary = true
 use_sniper_laser = true

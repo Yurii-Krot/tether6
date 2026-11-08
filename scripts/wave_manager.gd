@@ -1,6 +1,8 @@
 class_name WaveManager
 extends Node
 
+const GAME_STATE := preload("res://scripts/game_state.gd")
+
 signal wave_started(wave_number: int)
 signal wave_cleared
 signal all_waves_cleared
@@ -42,7 +44,7 @@ var _wave_delay_timer: Timer
 
 
 func _ready() -> void:
-	var level_cfg := GameState.get_current_level_data()
+	var level_cfg := GAME_STATE.get_current_level_data()
 	waves = [level_cfg]
 	spawn_interval = float(level_cfg.get("spawn_interval", spawn_interval))
 
@@ -199,6 +201,9 @@ func _get_scene_for_type(unit_type: String) -> PackedScene:
 
 
 func _register_unit(unit: Node2D, unit_type: String = "infantry") -> void:
+	var hp_mult := GAME_STATE.get_enemy_hp_multiplier(maxi(current_wave_index, 0))
+	if "health" in unit:
+		unit.health = roundf(float(unit.health) * hp_mult)
 	var id := unit.get_instance_id()
 	_alive_enemies[id] = true
 	if unit.has_signal("died"):
@@ -210,7 +215,7 @@ func _on_unit_died(instance_id: int, unit: Node2D, unit_type: String) -> void:
 	if not _rewarded_enemies.has(instance_id):
 		_rewarded_enemies[instance_id] = true
 		var pos := unit.global_position if is_instance_valid(unit) else Vector2(640.0, 480.0)
-		var reward := GameState.get_kill_reward(unit_type)
+		var reward := GAME_STATE.get_kill_reward(unit_type)
 		enemy_killed.emit(unit_type, pos, reward)
 	_on_enemy_eliminated(instance_id)
 

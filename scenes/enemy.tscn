@@ -10,7 +10,9 @@ size = Vector2(58, 98)
 [node name="Enemy" type="CharacterBody2D" unique_id=355634528]
 collision_mask = 0
 script = ExtResource("1_enemy")
+health = 80.0
 speed = 115.0
+attack_damage = 7.0
 projectile_speed = 540.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1091257786]

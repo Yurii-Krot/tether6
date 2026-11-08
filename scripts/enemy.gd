@@ -15,7 +15,7 @@ const ENEMY_ROW_SHOOT := 1
 const ENEMY_ROW_HURT := 2
 const ENEMY_ROW_DEATH := 3
 
-@export var health := 30.0
+@export var health := 80.0
 @export var speed := 95.0
 @export var stop_distance := 340.0
 @export var attack_interval := 1.6
@@ -31,7 +31,7 @@ const ENEMY_ROW_DEATH := 3
 @export var use_sniper_laser := false
 
 var state: State = State.ADVANCE
-var _max_health := 30.0
+var _max_health := 80.0
 var _stop_x := 525.0
 var _attack_timer := 0.0
 var _shot_visual_timer := 0.0

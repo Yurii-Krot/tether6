@@ -8,6 +8,8 @@ signal roll_started(direction: float)
 signal roll_finished
 
 const CROSSHAIR_TEXTURE := preload("res://assets/crosshair.png")
+const GRENADE_SCRIPT := preload("res://scripts/grenade.gd")
+const GAME_STATE := preload("res://scripts/game_state.gd")
 const BASE_SPRITE_SCALE := Vector2(0.5, 0.5)
 const SHOULDER_OFFSET_STAND := Vector2(-9.0, -6.0)
 const SHOULDER_OFFSET_CROUCH := Vector2(-12.0, 6.6)
@@ -36,7 +38,15 @@ const ANIM_ROW_ROLL := 3
 @export var roll_duration := 0.28
 @export var roll_cooldown := 0.07
 
+@export_group("Grenade")
+@export var max_grenades := 3
+@export var grenade_cooldown := 1.6
+@export var grenade_throw_distance := 485.0
+@export var grenade_damage := 140.0
+@export var grenade_radius := 265.0
+
 var ammo := 30
+var grenades := 3
 var health := 100.0
 var cooldown := 0.0
 # У стані спокою боєць за замовчуванням захований в окопі (не отримує урон)
@@ -62,6 +72,10 @@ var _landing_squash_timer := 0.0
 var _current_aim_angle := 0.0
 var _damage_tint_timer := 0.0
 var _hurt_flinch_timer := 0.0
+var _grenade_cooldown_timer := 0.0
+var _grenade_throw_timer := 0.0
+var _grenade_throw_duration := 0.30
+var _grenade_launched := false
 
 @onready var shadow: Polygon2D = get_node_or_null("Shadow")
 @onready var body: Sprite2D = $Body
@@ -81,7 +95,12 @@ func _ready() -> void:
 	add_to_group("player")
 	_ensure_input_actions()
 
+	max_health = GAME_STATE.get_player_max_health()
+	damage = GAME_STATE.get_player_bullet_damage()
+	max_grenades = GAME_STATE.get_player_max_grenades()
+
 	ammo = magazine_size
+	grenades = max_grenades
 	health = max_health
 	position.y = clampf(position.y, trench_min_y, trench_max_y)
 
@@ -102,21 +121,26 @@ func _process(delta: float) -> void:
 	_roll_cooldown_timer = maxf(_roll_cooldown_timer - delta, 0.0)
 	_landing_squash_timer = maxf(_landing_squash_timer - delta, 0.0)
 	_hurt_flinch_timer = maxf(_hurt_flinch_timer - delta, 0.0)
+	_grenade_cooldown_timer = maxf(_grenade_cooldown_timer - delta, 0.0)
 
 	if is_rolling:
 		_process_roll(delta)
 	else:
 		_handle_roll_input()
+		_handle_grenade_input()
+
+	if _grenade_throw_timer > 0.0:
+		_process_grenade_throw(delta)
 
 	var mouse_pos := get_global_mouse_position()
 	cooldown = maxf(cooldown - delta, 0.0)
 
 	# Логіка укриття: у стані спокою (коли не стріляємо) боєць захований в окопі й не отримує урон.
 	# Коли затискаємо ЛКМ (shoot) і є патрони — висовується з окопу, веде гвинтівку за прицілом і стріляє.
-	var force_cover := Input.is_action_pressed("cover")
-	var wants_to_shoot := Input.is_action_pressed("shoot") and ammo > 0 and not force_cover and not is_rolling
+	var force_cover := Input.is_action_pressed("cover") and _grenade_throw_timer <= 0.0
+	var wants_to_shoot := Input.is_action_pressed("shoot") and ammo > 0 and not force_cover and not is_rolling and _grenade_throw_timer <= 0.0
 
-	if wants_to_shoot:
+	if wants_to_shoot or _grenade_throw_timer > 0.0:
 		_combat_expose_timer = 0.16
 	else:
 		_combat_expose_timer = maxf(_combat_expose_timer - delta, 0.0)
@@ -152,7 +176,7 @@ func _update_weapon_aim(delta: float, mouse_pos: Vector2) -> void:
 	var raw_angle := atan2(to_mouse.y, maxf(to_mouse.x, 25.0))
 	var clamped_aim := clampf(raw_angle, -0.78, 0.78)
 
-	if is_in_cover:
+	if is_in_cover and _grenade_throw_timer <= 0.0:
 		# В окопі гвинтівка опущена вниз-вперед і рухається під час перезарядки
 		var reload_angle := 0.22 + (sin(_anim_time * 11.0) * 0.12 if ammo < magazine_size else sin(_anim_time * 3.0) * 0.03)
 		_current_aim_angle = lerp_angle(_current_aim_angle, reload_angle, minf(delta * 14.0, 1.0))
@@ -160,6 +184,14 @@ func _update_weapon_aim(delta: float, mouse_pos: Vector2) -> void:
 		weapon_pivot.rotation = _current_aim_angle
 		if weapon_sprite:
 			weapon_sprite.frame = 0
+			weapon_sprite.modulate = body.modulate
+	elif _grenade_throw_timer > 0.0:
+		# Фаза метання/пуску гранати (як у Рядку 0 кадри 0..8 референсу): піднімає ствол вгору під кутом ~40° і робить постріл гранатою по навісній траєкторії
+		var throw_angle := -0.68
+		_current_aim_angle = lerp_angle(_current_aim_angle, throw_angle, minf(delta * 28.0, 1.0))
+		weapon_pivot.position = body.position + SHOULDER_OFFSET_STAND
+		weapon_pivot.rotation = _current_aim_angle + _recoil_angle
+		if weapon_sprite:
 			weapon_sprite.modulate = body.modulate
 	else:
 		# Під час стрільби гвинтівка з руками точно ходить за перехрестям мишки!
@@ -256,6 +288,61 @@ func take_damage(amount: float, ignore_cover: bool = false) -> void:
 
 	if health <= 0.0:
 		_die()
+
+
+func _handle_grenade_input() -> void:
+	if _grenade_cooldown_timer > 0.0 or _grenade_throw_timer > 0.0 or grenades <= 0:
+		return
+	if Input.is_action_just_pressed("throw_grenade"):
+		_start_grenade_throw()
+
+
+func _start_grenade_throw() -> void:
+	grenades -= 1
+	_grenade_cooldown_timer = grenade_cooldown
+	_grenade_throw_timer = _grenade_throw_duration
+	_grenade_launched = false
+	_combat_expose_timer = _grenade_throw_duration + 0.06
+	if is_in_cover:
+		_set_cover(false)
+	_update_hud()
+
+
+func _process_grenade_throw(delta: float) -> void:
+	_grenade_throw_timer = maxf(_grenade_throw_timer - delta, 0.0)
+	var prog := 1.0 - (_grenade_throw_timer / maxf(_grenade_throw_duration, 0.05))
+
+	# Легкий замах корпусом назад перед пуском гранати (кадри 0..7 Рядка 0 референсу)
+	body.position = Vector2(-sin(prog * PI) * 5.0, 0.0)
+	body.rotation = -sin(prog * PI) * 0.08
+
+	if prog >= 0.45 and not _grenade_launched:
+		_grenade_launched = true
+		_launch_grenade_projectile()
+
+
+func _launch_grenade_projectile() -> void:
+	var parent_node := get_parent()
+	if parent_node == null:
+		return
+
+	var launch_from := muzzle.global_position if muzzle != null else (global_position + Vector2(36.0, -24.0))
+	var target_pos := Vector2(global_position.x + grenade_throw_distance, global_position.y)
+
+	var gren: Node2D = GRENADE_SCRIPT.new()
+	gren.setup(launch_from, target_pos, grenade_damage, grenade_radius)
+	parent_node.add_child(gren)
+
+	# Візуальна та звукова віддача пуску гранати (як на кадрі 8-9 Рядка 0 референсу)
+	_shoot_anim_timer = 0.18
+	if weapon_sprite:
+		weapon_sprite.frame = 2
+	_recoil_offset = recoil_distance * 1.45
+	_recoil_angle = -0.10
+	barrel.position.x = -_recoil_offset
+	if shot_sound:
+		shot_sound.pitch_scale = 0.62
+		shot_sound.play()
 
 
 func _handle_roll_input() -> void:
@@ -599,17 +686,23 @@ func _update_hud() -> void:
 	if is_dead:
 		status_label.text = "ЗАГИНУВ"
 	elif is_rolling:
-		status_label.text = "[КУВИРОК] Патрони: %d/%d" % [ammo, magazine_size]
+		status_label.text = "[КУВИРОК] Патрони: %d/%d | Гранати [1]: %d" % [ammo, magazine_size, grenades]
 	elif is_in_cover:
 		if ammo < magazine_size:
-			status_label.text = "[В ОКОПІ] Перезарядка: %d/%d" % [ammo, magazine_size]
+			status_label.text = "[В ОКОПІ] Перезарядка: %d/%d | Гранати [1]: %d" % [ammo, magazine_size, grenades]
 		else:
-			status_label.text = "[В ОКОПІ] Патрони: %d/%d" % [ammo, magazine_size]
+			status_label.text = "[В ОКОПІ] Патрони: %d/%d | Гранати [1]: %d" % [ammo, magazine_size, grenades]
 	else:
-		status_label.text = "[ВОГОНЬ!] Патрони: %d/%d" % [ammo, magazine_size]
+		status_label.text = "[ВОГОНЬ!] Патрони: %d/%d | Гранати [1]: %d" % [ammo, magazine_size, grenades]
 
 
 func _ensure_input_actions() -> void:
+	if not InputMap.has_action("throw_grenade"):
+		InputMap.add_action("throw_grenade")
+		for key in [KEY_1, KEY_KP_1]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = key
+			InputMap.action_add_event("throw_grenade", ev)
 	if not InputMap.has_action("cover"):
 		InputMap.add_action("cover")
 		var ev := InputEventKey.new()

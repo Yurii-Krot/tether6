@@ -134,6 +134,7 @@ grow_vertical = 2
 color = Color(0.18, 0.18, 0.19, 0.97)
 
 [node name="ComingSoonLabel" type="Label" parent="PanelFrame/BodyBox"]
+visible = false
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -153,6 +154,19 @@ theme_override_font_sizes/font_size = 54
 text = "COMING SOON"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="UpgradesContainer" type="VBoxContainer" parent="PanelFrame/BodyBox"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 28.0
+offset_top = 18.0
+offset_right = -28.0
+offset_bottom = -58.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
 
 [node name="EarnedLabel" type="Label" parent="PanelFrame/BodyBox"]
 layout_mode = 1

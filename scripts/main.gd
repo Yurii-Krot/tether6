@@ -1,5 +1,6 @@
 extends Node2D
 
+const GAME_STATE := preload("res://scripts/game_state.gd")
 const UPGRADE_SCENE_PATH := "res://scenes/upgrade_menu.tscn"
 const MAIN_MENU_SCENE_PATH := "res://scenes/main_menu.tscn"
 
@@ -43,7 +44,7 @@ func _process(delta: float) -> void:
 		_elapsed_time += delta
 	elif not _transitioning and Input.is_action_just_pressed("ui_accept"):
 		if _campaign_won:
-			GameState.reset_campaign()
+			GAME_STATE.reset_campaign()
 			_fade_to_scene(MAIN_MENU_SCENE_PATH)
 		else:
 			_fade_to_scene(UPGRADE_SCENE_PATH)
@@ -51,7 +52,7 @@ func _process(delta: float) -> void:
 
 func _update_hud() -> void:
 	if wave_label:
-		wave_label.text = "Рівень: %d / %d   |   Монети: $%d" % [GameState.current_level, GameState.TOTAL_LEVELS, GameState.coins]
+		wave_label.text = "Рівень: %d / %d   |   Монети: $%d" % [GAME_STATE.current_level, GAME_STATE.TOTAL_LEVELS, GAME_STATE.coins]
 
 
 func _on_wave_started(_wave_number: int) -> void:
@@ -62,7 +63,7 @@ func _on_wave_started(_wave_number: int) -> void:
 
 
 func _on_enemy_killed(_unit_type: String, world_pos: Vector2, reward: int) -> void:
-	GameState.coins += reward
+	GAME_STATE.coins += reward
 	_level_earned += reward
 	_update_hud()
 	_spawn_coin_popup(world_pos, reward)
@@ -94,15 +95,15 @@ func _on_all_waves_cleared() -> void:
 		return
 	_game_over = true
 
-	var clear_bonus := int(GameState.get_current_level_data().get("reward", 50))
-	GameState.coins += clear_bonus
+	var clear_bonus := int(GAME_STATE.get_current_level_data().get("reward", 50))
+	GAME_STATE.coins += clear_bonus
 	_level_earned += clear_bonus
-	GameState.last_level_earned = _level_earned
+	GAME_STATE.last_level_earned = _level_earned
 	_update_hud()
 
-	var finished_level := GameState.current_level
-	if finished_level < GameState.TOTAL_LEVELS:
-		GameState.current_level += 1
+	var finished_level := GAME_STATE.current_level
+	if finished_level < GAME_STATE.TOTAL_LEVELS:
+		GAME_STATE.current_level += 1
 		banner_label.modulate = Color(0.75, 1.0, 0.75, 1.0)
 		banner_label.text = "РІВЕНЬ %d ПРОЙДЕНО!\nЗароблено за бій: +$%d" % [finished_level, _level_earned]
 		var wait_tween := create_tween()
@@ -110,16 +111,16 @@ func _on_all_waves_cleared() -> void:
 		wait_tween.tween_callback(_fade_to_scene.bind(UPGRADE_SCENE_PATH))
 	else:
 		_campaign_won = true
-		GameState.current_level = GameState.TOTAL_LEVELS + 1
+		GAME_STATE.current_level = GAME_STATE.TOTAL_LEVELS + 1
 		banner_label.modulate = Color(1.0, 0.92, 0.4, 1.0)
-		banner_label.text = "ПЕРЕМОГА! Всі %d рівнів пройдено!\nЗагальний баланс: $%d\n[Enter — у головне меню]" % [GameState.TOTAL_LEVELS, GameState.coins]
+		banner_label.text = "ПЕРЕМОГА! Всі %d рівнів пройдено!\nЗагальний баланс: $%d\n[Enter — у головне меню]" % [GAME_STATE.TOTAL_LEVELS, GAME_STATE.coins]
 
 
 func _on_player_died() -> void:
 	if _game_over:
 		return
 	_game_over = true
-	GameState.last_level_earned = _level_earned
+	GAME_STATE.last_level_earned = _level_earned
 	banner_label.modulate = Color(1.0, 0.42, 0.42, 1.0)
 	banner_label.text = "ПОРАЗКА! Відступаємо у вікно покращень...\n(Зароблено: +$%d)" % _level_earned
 	var wait_tween := create_tween()

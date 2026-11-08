@@ -2,10 +2,18 @@ class_name GameState
 extends RefCounted
 
 const TOTAL_LEVELS := 15
+const MAX_UPGRADE_LEVEL := 5
+const BASE_UPGRADE_COST := 50
 
 static var current_level: int = 1
 static var coins: int = 0
 static var last_level_earned: int = 0
+
+# Рівні прокачки (від 0 до MAX_UPGRADE_LEVEL = 5)
+static var upg_hp_level: int = 0
+static var upg_damage_level: int = 0
+static var upg_grenades_level: int = 0
+static var upg_coins_level: int = 0
 
 # Таблиця 15 рівнів із поступовим зростанням складності та збільшеною кількістю снайперів
 const LEVEL_DATA: Array[Dictionary] = [
@@ -47,19 +55,92 @@ static func get_current_level_data() -> Dictionary:
 	return LEVEL_DATA[idx]
 
 
+static func get_enemy_hp_multiplier(wave_index: int = 0) -> float:
+	# На кожній новій хвилі/рівні додається +10% від БАЗОВОГО (початкового) ХП ворога
+	var step := maxi(current_level - 1, 0) + maxi(wave_index, 0)
+	return 1.0 + 0.10 * float(step)
+
+
+static func get_player_max_health() -> float:
+	return 100.0 + float(upg_hp_level) * 25.0
+
+
+static func get_player_bullet_damage() -> float:
+	return 10.0 + float(upg_damage_level) * 3.0
+
+
+static func get_player_max_grenades() -> int:
+	return 3 + upg_grenades_level
+
+
+static func get_coin_multiplier() -> float:
+	return 1.0 + float(upg_coins_level) * 0.20
+
+
+static func get_upgrade_level(upg_key: String) -> int:
+	match upg_key:
+		"hp":
+			return upg_hp_level
+		"damage":
+			return upg_damage_level
+		"grenades":
+			return upg_grenades_level
+		"coins":
+			return upg_coins_level
+	return 0
+
+
+static func get_upgrade_cost(upg_key: String) -> int:
+	var lvl := get_upgrade_level(upg_key)
+	if lvl >= MAX_UPGRADE_LEVEL:
+		return 0
+	# Кожен наступний апгрейд у 2 рази дорожчий за попередній: 50, 100, 200, 400, 800
+	return BASE_UPGRADE_COST * (1 << lvl)
+
+
+static func can_buy_upgrade(upg_key: String) -> bool:
+	var lvl := get_upgrade_level(upg_key)
+	if lvl >= MAX_UPGRADE_LEVEL:
+		return false
+	return coins >= get_upgrade_cost(upg_key)
+
+
+static func buy_upgrade(upg_key: String) -> bool:
+	if not can_buy_upgrade(upg_key):
+		return false
+	var cost := get_upgrade_cost(upg_key)
+	coins -= cost
+	match upg_key:
+		"hp":
+			upg_hp_level += 1
+		"damage":
+			upg_damage_level += 1
+		"grenades":
+			upg_grenades_level += 1
+		"coins":
+			upg_coins_level += 1
+	return true
+
+
 static func get_kill_reward(unit_type: String) -> int:
+	var base_reward := 12
 	match unit_type:
 		"sniper":
-			return 25
+			base_reward = 25
 		"heavy":
-			return 30
+			base_reward = 30
 		"shotgun":
-			return 20
+			base_reward = 20
 		_:
-			return 12
+			base_reward = 12
+	return int(roundf(float(base_reward) * get_coin_multiplier()))
 
 
 static func reset_campaign() -> void:
 	current_level = 1
 	coins = 0
 	last_level_earned = 0
+	upg_hp_level = 0
+	upg_damage_level = 0
+	upg_grenades_level = 0
+	upg_coins_level = 0
