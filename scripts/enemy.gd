@@ -15,9 +15,15 @@ const ENEMY_ROW_SHOOT := 1
 const ENEMY_ROW_HURT := 2
 const ENEMY_ROW_DEATH := 3
 
+const GRENADIER_ROCKET_SCRIPT := preload("res://scripts/grenadier_rocket.gd")
+const WARNING_BEEP_STREAM := preload("res://assets/warning_beep.mp3")
+const TRENCH_TILES_Y: Array[float] = [395.0, 495.0, 595.0]
+const TILE_HALF_HEIGHT := 48.0
+const TILE_HALF_WIDTH := 42.0
+
 @export var health := 80.0
-@export var speed := 95.0
-@export var stop_distance := 340.0
+@export var speed := 155.0
+@export var stop_distance := 520.0
 @export var attack_interval := 1.6
 @export var attack_damage := 7.0
 @export var projectile_speed := 540.0
@@ -29,16 +35,20 @@ const ENEMY_ROW_DEATH := 3
 @export var use_red_bullet := false
 @export var is_stationary := false
 @export var use_sniper_laser := false
+@export var use_trench_tile_launcher := false
 
 var state: State = State.ADVANCE
 var _max_health := 80.0
 var _stop_x := 525.0
+var _has_custom_stop_x := false
 var _attack_timer := 0.0
 var _shot_visual_timer := 0.0
 var _base_color := Color.WHITE
 var _has_locked_aim := false
 var _locked_aim_pos := Vector2.ZERO
 var _target_marker: Polygon2D = null
+var _trench_warning_node: Node2D = null
+var _beep_player: AudioStreamPlayer = null
 var _hp_bar_root: Node2D = null
 var _hp_bar_fill: Polygon2D = null
 var _hp_bar_timer := 0.0
@@ -51,11 +61,12 @@ var _anim_time := 0.0
 var _shoot_anim_timer := 0.0
 var _shoot_anim_duration := 0.24
 var _hurt_anim_timer := 0.0
-var _hurt_anim_duration := 0.22
+var _hurt_anim_duration := 0.14
+var _hit_flash_timer := 0.0
 var _death_anim_timer := 0.0
 var _death_anim_duration := 0.48
 var _blood_splashed := false
-var _base_sprite_scale := Vector2(0.48, 0.48)
+var _base_sprite_scale := Vector2(0.62, 0.62)
 var _last_step_col := -1
 var _burst_shots_remaining := 0
 var _burst_timer := 0.0
@@ -85,6 +96,11 @@ func _ready() -> void:
 	_max_health = maxf(health, 1.0)
 	_create_target_marker()
 	_create_hp_bar()
+	if use_trench_tile_launcher:
+		_beep_player = AudioStreamPlayer.new()
+		_beep_player.stream = WARNING_BEEP_STREAM
+		_beep_player.volume_db = -1.0
+		add_child(_beep_player)
 
 	# Невеликий випадковий зсув фази кроку, щоб загін ворогів крокував природно, а не синхронно
 	_anim_time = randf_range(0.0, 10.0)
@@ -103,8 +119,9 @@ func _ready() -> void:
 	if body_rect:
 		_base_color = body_rect.color
 
-	var trench_x := _get_trench_x()
-	_stop_x = trench_x + stop_distance + randf_range(-55.0, 75.0)
+	if not _has_custom_stop_x:
+		var trench_x := _get_trench_x()
+		_stop_x = trench_x + stop_distance + randf_range(-55.0, 75.0)
 
 	if is_stationary:
 		state = State.ATTACK
@@ -114,10 +131,18 @@ func _ready() -> void:
 		_attack_timer = attack_interval * 0.5
 
 
+func set_custom_stop_x(custom_x: float) -> void:
+	_has_custom_stop_x = true
+	_stop_x = custom_x
+
+
 func _physics_process(delta: float) -> void:
 	_anim_time += delta
 	_update_shot_visual(delta)
+	_update_hit_flash(delta)
 	_update_hp_bar(delta)
+	if _trench_warning_node and is_instance_valid(_trench_warning_node):
+		_trench_warning_node.queue_redraw()
 
 	if _rappel_active and state != State.DEAD:
 		_process_rappel(delta)
@@ -273,7 +298,7 @@ func _update_sprite_animation(delta: float) -> void:
 	if _hurt_anim_timer > 0.0:
 		_hurt_anim_timer = maxf(_hurt_anim_timer - delta, 0.0)
 		var h_prog := 1.0 - (_hurt_anim_timer / _hurt_anim_duration)
-		var hurt_frames := 7 if is_six_row else cols
+		var hurt_frames := 3 if is_six_row else cols
 		var h_col := clampi(int(h_prog * float(hurt_frames)), 0, hurt_frames - 1)
 		body_sprite.frame_coords = Vector2i(h_col, row_hurt)
 		return
@@ -346,7 +371,7 @@ func _update_sprite_animation(delta: float) -> void:
 
 func _process_advance() -> void:
 	var trench_x := _get_trench_x()
-	var target_x := maxf(_stop_x, trench_x + stop_distance - 60.0)
+	var target_x := _stop_x if _has_custom_stop_x else maxf(_stop_x, trench_x + stop_distance - 60.0)
 	if global_position.x <= target_x:
 		velocity = Vector2.ZERO
 		state = State.ATTACK
@@ -359,16 +384,18 @@ func _process_advance() -> void:
 func _process_attack(delta: float) -> void:
 	velocity = Vector2.ZERO
 
-	var muzzle_offset := Vector2(-36.0, -2.5)
+	var muzzle_offset := Vector2(-46.0, -3.2)
 	if body_sprite != null:
 		if use_sniper_laser:
-			muzzle_offset = Vector2(-90.0, -6.5)
+			muzzle_offset = Vector2(-114.0, -8.0)
+		elif use_trench_tile_launcher:
+			muzzle_offset = Vector2(-82.0, -5.0)
 		elif shoot_straight or burst_count > 1:
-			muzzle_offset = Vector2(-82.0, -7.2)
+			muzzle_offset = Vector2(-104.0, -9.0)
 		elif pellet_count > 1:
-			muzzle_offset = Vector2(-71.0, -12.0)
+			muzzle_offset = Vector2(-90.0, -15.0)
 		else:
-			muzzle_offset = Vector2(-59.0, 0.0)
+			muzzle_offset = Vector2(-75.0, 0.0)
 	var muzzle_pos := global_position + muzzle_offset
 
 	# Якщо триває черга пострілів (наприклад, 8 куль поспіль у кулеметника)
@@ -383,16 +410,23 @@ func _process_attack(delta: float) -> void:
 		return
 
 	_attack_timer -= delta
-	var lock_window := 0.85 if use_sniper_laser else 0.38
+	var lock_window := 0.30 if use_trench_tile_launcher else (0.85 if use_sniper_laser else 0.38)
 
 	if not shoot_straight and _attack_timer <= lock_window and _attack_timer > 0.0 and not _has_locked_aim:
-		var p := _find_player()
-		if p:
-			_locked_aim_pos = p.global_position + Vector2(0.0, -8.0)
+		if use_trench_tile_launcher:
+			_locked_aim_pos = _choose_trench_tile_target()
 			_has_locked_aim = true
-			if _target_marker:
-				_target_marker.global_position = Vector2(_locked_aim_pos.x, _locked_aim_pos.y + 30.0)
-				_target_marker.visible = true
+			_spawn_trench_tile_warning(_locked_aim_pos)
+			if _beep_player:
+				_beep_player.play()
+		else:
+			var p := _find_player()
+			if p:
+				_locked_aim_pos = p.global_position + Vector2(0.0, -8.0)
+				_has_locked_aim = true
+				if _target_marker:
+					_target_marker.global_position = Vector2(_locked_aim_pos.x, _locked_aim_pos.y + 30.0)
+					_target_marker.visible = true
 
 	if _attack_timer <= 0.0:
 		if _target_marker:
@@ -407,7 +441,7 @@ func _process_attack(delta: float) -> void:
 
 func _perform_attack(muzzle_pos: Vector2) -> void:
 	var player := _find_player()
-	if player == null and not shoot_straight:
+	if player == null and not shoot_straight and not use_trench_tile_launcher:
 		return
 
 	# Запускаємо анімацію пострілу ворога та звук пострілу (якщо заданий)
@@ -415,10 +449,22 @@ func _perform_attack(muzzle_pos: Vector2) -> void:
 	if body_sprite:
 		var is_six_row := body_sprite.vframes >= 6
 		body_sprite.frame_coords = Vector2i(1 if is_six_row else 0, 2 if is_six_row else ENEMY_ROW_SHOOT)
-		_spawn_enemy_shell()
+		if not use_trench_tile_launcher:
+			_spawn_enemy_shell()
 	if shot_sound:
-		shot_sound.pitch_scale = randf_range(0.96, 1.04) if not use_sniper_laser else randf_range(0.98, 1.02)
+		shot_sound.pitch_scale = randf_range(0.76, 0.84) if use_trench_tile_launcher else (randf_range(0.96, 1.04) if not use_sniper_laser else randf_range(0.98, 1.02))
 		shot_sound.play()
+
+	if use_trench_tile_launcher:
+		var tile_target := _locked_aim_pos if _has_locked_aim else _choose_trench_tile_target()
+		var parent_node := get_parent()
+		if parent_node != null:
+			var rocket: Node2D = GRENADIER_ROCKET_SCRIPT.new()
+			var warn_to_pass := _trench_warning_node
+			_trench_warning_node = null
+			rocket.setup(muzzle_pos, tile_target, projectile_speed, attack_damage, warn_to_pass)
+			parent_node.add_child(rocket)
+		return
 
 	var target_pos: Vector2
 	if shoot_straight:
@@ -547,20 +593,18 @@ func take_damage(amount: float) -> bool:
 		return true
 
 	_show_hp_bar()
-	_hurt_anim_timer = 0.28 if (body_sprite and body_sprite.vframes >= 6) else _hurt_anim_duration
+	_hurt_anim_timer = _hurt_anim_duration
 	if body_sprite:
 		var is_six_row := body_sprite.vframes >= 6
 		body_sprite.frame_coords = Vector2i(0, 3 if is_six_row else ENEMY_ROW_HURT)
-		if not is_six_row:
-			_flash_hit()
-	else:
-		_flash_hit()
+	_flash_hit()
 	return false
 
 
 func _enter_dead_state() -> void:
 	var was_rappelling := _rappel_active
 	_rappel_active = false
+	_hit_flash_timer = 0.0
 	_release_rope()
 	state = State.DEAD
 	velocity = Vector2.ZERO
@@ -573,6 +617,11 @@ func _enter_dead_state() -> void:
 		shot_line.visible = false
 	if _target_marker:
 		_target_marker.visible = false
+	if _trench_warning_node and is_instance_valid(_trench_warning_node):
+		_trench_warning_node.queue_free()
+		_trench_warning_node = null
+	if _beep_player and _beep_player.playing:
+		_beep_player.stop()
 	if _hp_bar_root:
 		_hp_bar_root.visible = false
 	_hp_bar_timer = 0.0
@@ -693,16 +742,28 @@ func _spawn_ground_blood_splatter() -> void:
 
 
 func _flash_hit() -> void:
-	if not is_inside_tree():
-		return
+	_hit_flash_timer = 0.072
 	if body_sprite:
-		body_sprite.modulate = Color(2.0, 0.55, 0.50, 1.0)
-		var tween := create_tween()
-		tween.tween_property(body_sprite, "modulate", Color.WHITE, 0.14)
+		body_sprite.modulate = Color(2.35, 0.28, 0.28, 1.0)
 	elif body_rect:
-		body_rect.color = Color(1.0, 0.9, 0.75, 1.0)
-		var tween := create_tween()
-		tween.tween_property(body_rect, "color", _base_color, 0.09)
+		body_rect.color = Color(1.0, 0.35, 0.35, 1.0)
+
+
+func _update_hit_flash(delta: float) -> void:
+	if state == State.DEAD or _hit_flash_timer <= 0.0:
+		return
+	_hit_flash_timer = maxf(_hit_flash_timer - delta, 0.0)
+	if body_sprite:
+		if _hit_flash_timer > 0.028:
+			body_sprite.modulate = Color(2.35, 0.28, 0.28, 1.0)
+		elif _hit_flash_timer > 0.0:
+			var t := _hit_flash_timer / 0.028
+			body_sprite.modulate = Color.WHITE.lerp(Color(2.35, 0.28, 0.28, 1.0), t)
+		else:
+			body_sprite.modulate = Color.WHITE
+	elif body_rect:
+		if _hit_flash_timer <= 0.0:
+			body_rect.color = _base_color
 
 
 func _update_shot_visual(delta: float) -> void:
@@ -747,7 +808,7 @@ func _create_target_marker() -> void:
 
 func _create_hp_bar() -> void:
 	_hp_bar_root = Node2D.new()
-	_hp_bar_root.position = Vector2(0.0, -56.0)
+	_hp_bar_root.position = Vector2(0.0, -70.0)
 	_hp_bar_root.z_index = 20
 	_hp_bar_root.visible = false
 	add_child(_hp_bar_root)
@@ -810,3 +871,60 @@ func _update_hp_bar(delta: float) -> void:
 		_hp_bar_root.visible = false
 	elif _hp_bar_timer < 0.12:
 		_hp_bar_root.modulate.a = clampf(_hp_bar_timer / 0.12, 0.0, 1.0)
+
+
+func _choose_trench_tile_target() -> Vector2:
+	var tx := _get_trench_x()
+	var p := _find_player()
+	if p != null and not p.get("is_dead"):
+		var best_idx := 1
+		var best_dist := INF
+		for i in range(TRENCH_TILES_Y.size()):
+			var d := absf(p.global_position.y - TRENCH_TILES_Y[i])
+			if d < best_dist:
+				best_dist = d
+				best_idx = i
+		return Vector2(tx, TRENCH_TILES_Y[best_idx])
+	return Vector2(tx, TRENCH_TILES_Y[randi() % TRENCH_TILES_Y.size()])
+
+
+func _spawn_trench_tile_warning(tile_pos: Vector2) -> void:
+	if _trench_warning_node and is_instance_valid(_trench_warning_node):
+		_trench_warning_node.queue_free()
+		_trench_warning_node = null
+
+	var parent_node := get_parent()
+	if parent_node == null:
+		return
+
+	_trench_warning_node = Node2D.new()
+	_trench_warning_node.global_position = tile_pos
+	_trench_warning_node.z_index = 3
+	_trench_warning_node.draw.connect(_draw_trench_tile_warning)
+	parent_node.add_child(_trench_warning_node)
+
+
+func _draw_trench_tile_warning() -> void:
+	if _trench_warning_node == null or not is_instance_valid(_trench_warning_node):
+		return
+	# Швидке мигання попереджувальної мітки в окопі під час 0.3 с звуку "пі-пі-пі"
+	var pulse := 0.5 + 0.5 * sin(_anim_time * 52.0)
+	var alpha := lerpf(0.28, 0.92, pulse)
+
+	var rect := Rect2(
+		-TILE_HALF_WIDTH,
+		-TILE_HALF_HEIGHT + 4.0,
+		TILE_HALF_WIDTH * 2.0,
+		(TILE_HALF_HEIGHT - 4.0) * 2.0
+	)
+	_trench_warning_node.draw_rect(rect, Color(1.0, 0.16, 0.08, alpha * 0.48), true)
+	_trench_warning_node.draw_rect(rect, Color(1.0, 0.35, 0.12, alpha), false, 2.6)
+	_trench_warning_node.draw_arc(Vector2.ZERO, lerpf(24.0, 14.0, pulse), 0.0, TAU, 24, Color(1.0, 0.90, 0.25, alpha), 2.2)
+	_trench_warning_node.draw_line(Vector2(-15.0, 0.0), Vector2(15.0, 0.0), Color(1.0, 0.25, 0.12, alpha), 2.2)
+	_trench_warning_node.draw_line(Vector2(0.0, -15.0), Vector2(0.0, 15.0), Color(1.0, 0.25, 0.12, alpha), 2.2)
+
+
+func _exit_tree() -> void:
+	if _trench_warning_node and is_instance_valid(_trench_warning_node):
+		_trench_warning_node.queue_free()
+		_trench_warning_node = null

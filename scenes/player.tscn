@@ -10,30 +10,31 @@
 script = ExtResource("1_3vyb7")
 
 [node name="Shadow" type="Polygon2D" parent="." unique_id=181100100]
-position = Vector2(0, 45)
+position = Vector2(0, 56)
+scale = Vector2(1.28, 1.28)
 color = Color(0, 0, 0, 0.42)
 polygon = PackedVector2Array(-31, 0, -23, -7, 0, -9.5, 23, -7, 31, 0, 23, 7, 0, 9.5, -23, 7)
 
 [node name="Body" type="Sprite2D" parent="." unique_id=450905754]
-scale = Vector2(0.5, 0.5)
+scale = Vector2(0.64, 0.64)
 texture = ExtResource("4_player_sheet")
 offset = Vector2(46, -10)
 hframes = 6
 vframes = 4
 
 [node name="WeaponPivot" type="Node2D" parent="." unique_id=181100102]
-position = Vector2(-9, -6)
+position = Vector2(-11.5, -7.5)
 
 [node name="Barrel" type="Node2D" parent="WeaponPivot" unique_id=181100103]
 
 [node name="WeaponSprite" type="Sprite2D" parent="WeaponPivot/Barrel" unique_id=181100115]
-scale = Vector2(0.5, 0.5)
+scale = Vector2(0.64, 0.64)
 texture = ExtResource("5_rifle_sheet")
 offset = Vector2(64, 2)
 hframes = 6
 
 [node name="Muzzle" type="Marker2D" parent="WeaponPivot/Barrel" unique_id=181100105]
-position = Vector2(72, 3.6)
+position = Vector2(92, 4.6)
 
 [node name="MuzzleFlash" type="Polygon2D" parent="WeaponPivot/Barrel/Muzzle" unique_id=181100106]
 visible = false

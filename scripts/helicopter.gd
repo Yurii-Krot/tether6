@@ -19,7 +19,7 @@ enum Phase {
 
 const BLADE_TEX := preload("res://assets/heli_blade.png")
 const TRENCH_X := 185.0
-const TRENCH_TILES_Y: Array[float] = [440.0, 535.0, 625.0]
+const TRENCH_TILES_Y: Array[float] = [395.0, 495.0, 595.0]
 
 # Координати в пікселях текстури heli_body.png (центр спрайта = 0,0), ніс дивиться вліво
 const ROTOR_HUB := Vector2(-84.0, -113.0)
@@ -41,9 +41,9 @@ const VISUAL_SCALE := 0.9
 @export var rocket_interval := 1.05
 @export var rocket_speed := 740.0
 @export var rocket_damage := 24.0
-@export var ground_dust_y := 395.0
-@export var land_y_min := 430.0
-@export var land_y_max := 600.0
+@export var ground_dust_y := 355.0
+@export var land_y_min := 385.0
+@export var land_y_max := 575.0
 
 var troop_types: Array[String] = []
 

@@ -4,14 +4,14 @@
 [ext_resource type="Texture2D" path="res://assets/shotgunner_spritesheet.png" id="2_shotgun_sheet"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_shotgun"]
-size = Vector2(60, 98)
+size = Vector2(74, 122)
 
 [node name="Shotgunner" type="CharacterBody2D" unique_id=191400401]
 collision_mask = 0
 script = ExtResource("1_enemy")
 health = 100.0
-speed = 98.0
-stop_distance = 275.0
+speed = 135.0
+stop_distance = 450.0
 attack_interval = 2.1
 attack_damage = 7.0
 projectile_speed = 560.0
@@ -22,12 +22,13 @@ spread_angle_deg = 28.0
 shape = SubResource("RectangleShape2D_shotgun")
 
 [node name="Shadow" type="Polygon2D" parent="." unique_id=191400403]
-position = Vector2(0, 44)
+position = Vector2(0, 56)
+scale = Vector2(1.28, 1.28)
 color = Color(0, 0, 0, 0.38)
 polygon = PackedVector2Array(-31, 0, -22, -6, 0, -8.5, 22, -6, 31, 0, 22, 6, 0, 8.5, -22, 6)
 
 [node name="BodySprite" type="Sprite2D" parent="." unique_id=191400404]
-scale = Vector2(0.48, 0.48)
+scale = Vector2(0.62, 0.62)
 texture = ExtResource("2_shotgun_sheet")
 offset = Vector2(-34, -6)
 hframes = 12

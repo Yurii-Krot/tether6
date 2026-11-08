@@ -1,0 +1,46 @@
+[gd_scene format=3 uid="uid://cgrenadier001"]
+
+[ext_resource type="Script" uid="uid://b0j1rpe7d22dc" path="res://scripts/enemy.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/grenadier_spritesheet.png" id="2_grenadier_sheet"]
+[ext_resource type="AudioStream" path="res://assets/rocket_launch.ogg" id="3_launcher_shoot"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_grenadier"]
+size = Vector2(74, 124)
+
+[node name="Grenadier" type="CharacterBody2D" unique_id=191500401]
+collision_mask = 0
+script = ExtResource("1_enemy")
+health = 130.0
+speed = 145.0
+stop_distance = 720.0
+attack_interval = 3.5
+attack_damage = 25.0
+projectile_speed = 1840.0
+use_trench_tile_launcher = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=191500402]
+shape = SubResource("RectangleShape2D_grenadier")
+
+[node name="Shadow" type="Polygon2D" parent="." unique_id=191500403]
+position = Vector2(0, 56)
+scale = Vector2(1.28, 1.28)
+color = Color(0, 0, 0, 0.4)
+polygon = PackedVector2Array(-30, 0, -21, -6, 0, -8.5, 21, -6, 30, 0, 21, 6, 0, 8.5, -21, 6)
+
+[node name="BodySprite" type="Sprite2D" parent="." unique_id=191500404]
+scale = Vector2(0.62, 0.62)
+texture = ExtResource("2_grenadier_sheet")
+offset = Vector2(-22, -6)
+hframes = 12
+vframes = 6
+
+[node name="ShotLine" type="Line2D" parent="." unique_id=191500405]
+top_level = true
+visible = false
+width = 2.0
+default_color = Color(1, 0.55, 0.2, 0.9)
+
+[node name="ShotSound" type="AudioStreamPlayer" parent="." unique_id=191500406]
+stream = ExtResource("3_launcher_shoot")
+volume_db = -1.5
+max_polyphony = 2

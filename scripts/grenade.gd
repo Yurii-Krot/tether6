@@ -2,6 +2,7 @@ class_name Grenade
 extends Node2D
 
 const SHEET_TEX := preload("res://assets/grenade_explosion_sheet.png")
+const EXPLOSION_SOUND := preload("res://assets/grenade_explosion.wav")
 const HFRAMES := 12
 const VFRAMES := 2
 const TOTAL_EXPLOSION_FRAMES := 23 # Кадри 1..23 у листі 12x2
@@ -113,7 +114,18 @@ func _trigger_explosion() -> void:
 	_sprite.frame = 1
 
 	_spawn_scorch_mark(impact_ground_pos)
+	_play_explosion_sound()
 	_apply_explosion_damage(impact_ground_pos)
+
+
+func _play_explosion_sound() -> void:
+	var host := get_parent() if get_parent() != null else self
+	var sfx := AudioStreamPlayer.new()
+	sfx.stream = EXPLOSION_SOUND
+	sfx.volume_db = 0.0
+	host.add_child(sfx)
+	sfx.finished.connect(sfx.queue_free)
+	sfx.play()
 
 
 func _process_explosion(delta: float) -> void:

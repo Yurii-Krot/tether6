@@ -15,38 +15,38 @@ static var upg_damage_level: int = 0
 static var upg_grenades_level: int = 0
 static var upg_coins_level: int = 0
 
-# Таблиця 15 рівнів із поступовим зростанням складності та збільшеною кількістю снайперів
+# Таблиця 15 рівнів із збільшеною кількістю ворогів (на 1 рівні втричі більше, далі пропорційно більше, червоні важкі кулеметники є на кожному рівні)
 const LEVEL_DATA: Array[Dictionary] = [
-	# Рівень 1: розминка, перші піхотинці та 1 снайпер
-	{"infantry": 4, "shotgun": 0, "heavy": 0, "snipers": 1, "heli": 0, "heli_troops": 0, "spawn_interval": 3.2, "reward": 50},
-	# Рівень 2: більше піхоти + дробовик + 2 снайпери
-	{"infantry": 5, "shotgun": 1, "heavy": 0, "snipers": 2, "heli": 0, "heli_troops": 0, "spawn_interval": 3.0, "reward": 65},
-	# Рівень 3: з'являється перший вертоліт з десантом + 2 снайпери
-	{"infantry": 5, "shotgun": 2, "heavy": 0, "snipers": 2, "heli": 1, "heli_troops": 3, "spawn_interval": 2.9, "reward": 80},
-	# Рівень 4: перший важкий кулеметник + 2 снайпери
-	{"infantry": 6, "shotgun": 2, "heavy": 1, "snipers": 2, "heli": 0, "heli_troops": 0, "spawn_interval": 2.8, "reward": 95},
-	# Рівень 5: вертоліт + кулеметник + 3 снайпери
-	{"infantry": 6, "shotgun": 2, "heavy": 1, "snipers": 3, "heli": 1, "heli_troops": 3, "spawn_interval": 2.7, "reward": 110},
-	# Рівень 6: інтенсивний штурм дробовиків та 3 снайпери
-	{"infantry": 7, "shotgun": 3, "heavy": 1, "snipers": 3, "heli": 1, "heli_troops": 4, "spawn_interval": 2.6, "reward": 125},
-	# Рівень 7: 2 кулеметники + 3 снайпери
-	{"infantry": 8, "shotgun": 3, "heavy": 2, "snipers": 3, "heli": 1, "heli_troops": 4, "spawn_interval": 2.5, "reward": 140},
-	# Рівень 8: 4 снайпери на позиціях + десант
-	{"infantry": 8, "shotgun": 3, "heavy": 2, "snipers": 4, "heli": 1, "heli_troops": 4, "spawn_interval": 2.4, "reward": 160},
-	# Рівень 9: подвійний вертолітний десант + 4 снайпери
-	{"infantry": 9, "shotgun": 4, "heavy": 2, "snipers": 4, "heli": 2, "heli_troops": 4, "spawn_interval": 2.3, "reward": 180},
-	# Рівень 10: 3 кулеметники + 4 снайпери
-	{"infantry": 10, "shotgun": 4, "heavy": 3, "snipers": 4, "heli": 2, "heli_troops": 4, "spawn_interval": 2.2, "reward": 200},
-	# Рівень 11: 5 снайперів + важка піхота
-	{"infantry": 10, "shotgun": 4, "heavy": 3, "snipers": 5, "heli": 2, "heli_troops": 5, "spawn_interval": 2.1, "reward": 225},
-	# Рівень 12: масований штурм + 5 снайперів
-	{"infantry": 11, "shotgun": 5, "heavy": 3, "snipers": 5, "heli": 2, "heli_troops": 5, "spawn_interval": 2.0, "reward": 250},
-	# Рівень 13: 4 кулеметники + 5 снайперів + 2 вертольоти
-	{"infantry": 12, "shotgun": 5, "heavy": 4, "snipers": 5, "heli": 2, "heli_troops": 5, "spawn_interval": 1.95, "reward": 280},
-	# Рівень 14: передостанній рубіж, 6 снайперів + 3 вертольоти
-	{"infantry": 13, "shotgun": 6, "heavy": 4, "snipers": 6, "heli": 3, "heli_troops": 5, "spawn_interval": 1.85, "reward": 320},
-	# Рівень 15: фінальна битва, 6 снайперів + 3 вертольоти з десантом
-	{"infantry": 15, "shotgun": 6, "heavy": 5, "snipers": 6, "heli": 3, "heli_troops": 6, "spawn_interval": 1.75, "reward": 400},
+	# Рівень 1: ~3x більше ворогів (12 піхотинців + 2 дробовики + 2 червоні кулеметники + 2 гранатометники + 2 снайпери = 20 ворогів)
+	{"infantry": 12, "shotgun": 2, "heavy": 2, "grenadier": 2, "snipers": 2, "heli": 0, "heli_troops": 0, "spawn_interval": 1.85, "reward": 60},
+	# Рівень 2: більше піхоти + дробовики + 3 червоні кулеметники + гранатометники + снайпери
+	{"infantry": 15, "shotgun": 3, "heavy": 3, "grenadier": 2, "snipers": 2, "heli": 0, "heli_troops": 0, "spawn_interval": 1.75, "reward": 75},
+	# Рівень 3: перший вертоліт з десантом + 3 червоні кулеметники + стрій піхоти та дробовики
+	{"infantry": 16, "shotgun": 4, "heavy": 3, "grenadier": 2, "snipers": 3, "heli": 1, "heli_troops": 3, "spawn_interval": 1.68, "reward": 95},
+	# Рівень 4: 4 червоні важкі кулеметники + строї з 5 бійців
+	{"infantry": 18, "shotgun": 5, "heavy": 4, "grenadier": 3, "snipers": 3, "heli": 0, "heli_troops": 0, "spawn_interval": 1.62, "reward": 110},
+	# Рівень 5: вертоліт + 4 червоні кулеметники + гранатометники + снайпери
+	{"infantry": 20, "shotgun": 6, "heavy": 4, "grenadier": 3, "snipers": 3, "heli": 1, "heli_troops": 4, "spawn_interval": 1.56, "reward": 130},
+	# Рівень 6: інтенсивний штурм дробовиків, 5 кулеметників та піхоти у строях V і в лінію
+	{"infantry": 22, "shotgun": 7, "heavy": 5, "grenadier": 4, "snipers": 4, "heli": 1, "heli_troops": 4, "spawn_interval": 1.50, "reward": 150},
+	# Рівень 7: посилені хвилі з 5 кулеметниками та гранатометниками
+	{"infantry": 24, "shotgun": 8, "heavy": 5, "grenadier": 4, "snipers": 4, "heli": 1, "heli_troops": 4, "spawn_interval": 1.45, "reward": 170},
+	# Рівень 8: 4 підхвилі, 6 кулеметників, снайпери на пагорбі + десант
+	{"infantry": 26, "shotgun": 9, "heavy": 6, "grenadier": 4, "snipers": 4, "heli": 1, "heli_troops": 5, "spawn_interval": 1.40, "reward": 195},
+	# Рівень 9: подвійний вертолітний десант + 6 кулеметників + масовані хвилі
+	{"infantry": 28, "shotgun": 10, "heavy": 6, "grenadier": 5, "snipers": 5, "heli": 2, "heli_troops": 4, "spawn_interval": 1.35, "reward": 220},
+	# Рівень 10: рубіж екватора кампанії, 7 кулеметників
+	{"infantry": 30, "shotgun": 11, "heavy": 7, "grenadier": 5, "snipers": 5, "heli": 2, "heli_troops": 5, "spawn_interval": 1.30, "reward": 250},
+	# Рівень 11: важка піхота, 7 кулеметників та строї дробовиків
+	{"infantry": 32, "shotgun": 12, "heavy": 7, "grenadier": 6, "snipers": 5, "heli": 2, "heli_troops": 5, "spawn_interval": 1.25, "reward": 280},
+	# Рівень 12: масований штурм у 4 хвилі, 8 кулеметників
+	{"infantry": 34, "shotgun": 13, "heavy": 8, "grenadier": 6, "snipers": 6, "heli": 2, "heli_troops": 5, "spawn_interval": 1.20, "reward": 310},
+	# Рівень 13: потужний наступ з усіх напрямків, 9 кулеметників
+	{"infantry": 36, "shotgun": 14, "heavy": 9, "grenadier": 7, "snipers": 6, "heli": 2, "heli_troops": 6, "spawn_interval": 1.15, "reward": 350},
+	# Рівень 14: передостанній рубіж, 3 вертольоти + 10 кулеметників
+	{"infantry": 39, "shotgun": 15, "heavy": 10, "grenadier": 8, "snipers": 6, "heli": 3, "heli_troops": 5, "spawn_interval": 1.10, "reward": 400},
+	# Рівень 15: фінальна битва, 12 кулеметників
+	{"infantry": 42, "shotgun": 16, "heavy": 12, "grenadier": 9, "snipers": 6, "heli": 3, "heli_troops": 6, "spawn_interval": 1.05, "reward": 500},
 ]
 
 
@@ -129,6 +129,8 @@ static func get_kill_reward(unit_type: String) -> int:
 			base_reward = 25
 		"heavy":
 			base_reward = 30
+		"grenadier":
+			base_reward = 28
 		"shotgun":
 			base_reward = 20
 		_:

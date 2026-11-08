@@ -10,10 +10,10 @@ signal roll_finished
 const CROSSHAIR_TEXTURE := preload("res://assets/crosshair.png")
 const GRENADE_SCRIPT := preload("res://scripts/grenade.gd")
 const GAME_STATE := preload("res://scripts/game_state.gd")
-const BASE_SPRITE_SCALE := Vector2(0.5, 0.5)
-const SHOULDER_OFFSET_STAND := Vector2(-9.0, -6.0)
-const SHOULDER_OFFSET_CROUCH := Vector2(-12.0, 6.6)
-const EJECT_LOCAL_POS := Vector2(29.0, -5.0)
+const BASE_SPRITE_SCALE := Vector2(0.64, 0.64)
+const SHOULDER_OFFSET_STAND := Vector2(-11.5, -7.5)
+const SHOULDER_OFFSET_CROUCH := Vector2(-15.0, 8.5)
+const EJECT_LOCAL_POS := Vector2(37.0, -6.5)
 
 # Рядки у спрайт-листі тіла res://assets/player_spritesheet.png (6x4 кадри)
 const ANIM_COLS := 6
@@ -26,24 +26,28 @@ const ANIM_ROW_ROLL := 3
 @export var fire_rate := 10.0 # 0.1 с між пострілами
 @export var bullet_speed := 1380.0
 @export var magazine_size := 30
-@export var reload_time := 1.5
+@export var reload_time := 3.5
 @export var max_health := 100.0
 @export var recoil_distance := 4.5
 @export var recoil_recovery_speed := 45.0
 
 @export_group("Trench Roll")
-@export var trench_min_y := 425.0
-@export var trench_max_y := 630.0
-@export var roll_distance := 95.0
+@export var trench_min_y := 390.0
+@export var trench_max_y := 600.0
+@export var roll_distance := 100.0
 @export var roll_duration := 0.28
 @export var roll_cooldown := 0.07
 
 @export_group("Grenade")
 @export var max_grenades := 3
 @export var grenade_cooldown := 1.6
-@export var grenade_throw_distance := 485.0
+@export var grenade_throw_distance := 540.0
 @export var grenade_damage := 140.0
 @export var grenade_radius := 265.0
+
+@export_group("Heal")
+@export var heal_cooldown := 40.0
+@export var heal_anim_duration := 0.85
 
 var ammo := 30
 var grenades := 3
@@ -60,8 +64,8 @@ var _recoil_offset := 0.0
 var _recoil_angle := 0.0
 var _roll_elapsed := 0.0
 var _roll_cooldown_timer := 0.0
-var _roll_start_y := 535.0
-var _roll_target_y := 535.0
+var _roll_start_y := 495.0
+var _roll_target_y := 495.0
 var _roll_dir := 0.0
 var _afterimage_timer := 0.0
 var _anim_time := 0.0
@@ -76,6 +80,26 @@ var _grenade_cooldown_timer := 0.0
 var _grenade_throw_timer := 0.0
 var _grenade_throw_duration := 0.30
 var _grenade_launched := false
+var _heal_cooldown_timer := 0.0
+var _heal_anim_timer := 0.0
+var _heal_applied := false
+
+# Візуальні бари ХП (червоний) та Патронів (синій) у лівому нижньому куті екрана
+const BAR_MAX_WIDTH := 280.0
+const BAR_HEIGHT := 24.0
+var _hud_layer: CanvasLayer = null
+var _hp_bar_trail: ColorRect = null
+var _hp_bar_main: ColorRect = null
+var _hp_bar_label: Label = null
+var _ammo_bar_trail: ColorRect = null
+var _ammo_bar_main: ColorRect = null
+var _ammo_bar_edge: ColorRect = null
+var _ammo_bar_label: Label = null
+var _bottom_status_label: Label = null
+var _hp_trail_ratio := 1.0
+var _hp_trail_hold_timer := 0.0
+var _ammo_trail_ratio := 1.0
+var _ammo_trail_hold_timer := 0.0
 
 @onready var shadow: Polygon2D = get_node_or_null("Shadow")
 @onready var body: Sprite2D = $Body
@@ -85,6 +109,7 @@ var _grenade_launched := false
 @onready var muzzle: Marker2D = $WeaponPivot/Barrel/Muzzle
 @onready var muzzle_flash: Polygon2D = $WeaponPivot/Barrel/Muzzle/MuzzleFlash
 @onready var tracer_line: Line2D = $TracerLine
+@onready var local_hud: Node2D = get_node_or_null("HUD")
 @onready var health_bar_fill: ColorRect = $HUD/HealthBarFill
 @onready var status_label: Label = $HUD/StatusLabel
 @onready var shot_sound: AudioStreamPlayer = $ShotSound
@@ -102,7 +127,13 @@ func _ready() -> void:
 	ammo = magazine_size
 	grenades = max_grenades
 	health = max_health
+	_hp_trail_ratio = 1.0
+	_ammo_trail_ratio = 1.0
 	position.y = clampf(position.y, trench_min_y, trench_max_y)
+
+	if local_hud:
+		local_hud.visible = false
+	_create_bottom_left_bars()
 
 	if DisplayServer.get_name() != "headless":
 		Input.set_custom_mouse_cursor(CROSSHAIR_TEXTURE, Input.CURSOR_ARROW, Vector2(16, 16))
@@ -114,6 +145,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_anim_time += delta
 	_update_shot_effects(delta)
+	_update_hud_bars(delta)
 
 	if is_dead:
 		return
@@ -122,36 +154,41 @@ func _process(delta: float) -> void:
 	_landing_squash_timer = maxf(_landing_squash_timer - delta, 0.0)
 	_hurt_flinch_timer = maxf(_hurt_flinch_timer - delta, 0.0)
 	_grenade_cooldown_timer = maxf(_grenade_cooldown_timer - delta, 0.0)
+	_heal_cooldown_timer = maxf(_heal_cooldown_timer - delta, 0.0)
 
 	if is_rolling:
 		_process_roll(delta)
 	else:
 		_handle_roll_input()
 		_handle_grenade_input()
+		_handle_heal_input()
 
 	if _grenade_throw_timer > 0.0:
 		_process_grenade_throw(delta)
+	if _heal_anim_timer > 0.0:
+		_process_heal_anim(delta)
 
 	var mouse_pos := get_global_mouse_position()
 	cooldown = maxf(cooldown - delta, 0.0)
 
 	# Логіка укриття: у стані спокою (коли не стріляємо) боєць захований в окопі й не отримує урон.
 	# Коли затискаємо ЛКМ (shoot) і є патрони — висовується з окопу, веде гвинтівку за прицілом і стріляє.
-	var force_cover := Input.is_action_pressed("cover") and _grenade_throw_timer <= 0.0
-	var wants_to_shoot := Input.is_action_pressed("shoot") and ammo > 0 and not force_cover and not is_rolling and _grenade_throw_timer <= 0.0
+	var busy_action := (_grenade_throw_timer > 0.0) or (_heal_anim_timer > 0.0)
+	var force_cover := Input.is_action_pressed("cover") and not busy_action
+	var wants_to_shoot := Input.is_action_pressed("shoot") and ammo > 0 and not force_cover and not is_rolling and not busy_action
 
-	if wants_to_shoot or _grenade_throw_timer > 0.0:
+	if wants_to_shoot or busy_action:
 		_combat_expose_timer = 0.16
 	else:
 		_combat_expose_timer = maxf(_combat_expose_timer - delta, 0.0)
 
-	var should_be_in_cover := (_combat_expose_timer <= 0.0) or force_cover or (ammo <= 0)
+	var should_be_in_cover := (_combat_expose_timer <= 0.0) or force_cover or (ammo <= 0 and not busy_action)
 	if not is_rolling and should_be_in_cover != is_in_cover:
 		_set_cover(should_be_in_cover)
 
 	_update_weapon_aim(delta, mouse_pos)
 
-	if not is_rolling:
+	if not is_rolling and _heal_anim_timer <= 0.0:
 		_update_sprite_frame_animation(delta)
 
 	if is_in_cover and not is_rolling:
@@ -160,6 +197,7 @@ func _process(delta: float) -> void:
 		_reload_accumulator = 0.0
 		if wants_to_shoot and cooldown <= 0.0 and ammo > 0:
 			ammo -= 1
+			_ammo_trail_hold_timer = 0.18
 			cooldown = 1.0 / fire_rate
 			shoot(mouse_pos)
 			ammo_changed.emit(ammo, magazine_size)
@@ -176,11 +214,21 @@ func _update_weapon_aim(delta: float, mouse_pos: Vector2) -> void:
 	var raw_angle := atan2(to_mouse.y, maxf(to_mouse.x, 25.0))
 	var clamped_aim := clampf(raw_angle, -0.78, 0.78)
 
-	if is_in_cover and _grenade_throw_timer <= 0.0:
+	if is_in_cover and _grenade_throw_timer <= 0.0 and _heal_anim_timer <= 0.0:
 		# В окопі гвинтівка опущена вниз-вперед і рухається під час перезарядки
 		var reload_angle := 0.22 + (sin(_anim_time * 11.0) * 0.12 if ammo < magazine_size else sin(_anim_time * 3.0) * 0.03)
 		_current_aim_angle = lerp_angle(_current_aim_angle, reload_angle, minf(delta * 14.0, 1.0))
 		weapon_pivot.position = body.position + SHOULDER_OFFSET_CROUCH
+		weapon_pivot.rotation = _current_aim_angle
+		if weapon_sprite:
+			weapon_sprite.frame = 0
+			weapon_sprite.modulate = body.modulate
+	elif _heal_anim_timer > 0.0:
+		# Анімація хілки (як на скріні): плавно піднімає гвинтівку вертикально вгору (-90°), тримає над головою і опускає назад
+		var raise_env := _get_heal_raise_envelope()
+		var target_heal_angle := lerpf(0.0, -PI * 0.5, raise_env)
+		_current_aim_angle = target_heal_angle
+		weapon_pivot.position = body.position + SHOULDER_OFFSET_STAND + Vector2(-4.5 * raise_env, -15.0 * raise_env)
 		weapon_pivot.rotation = _current_aim_angle
 		if weapon_sprite:
 			weapon_sprite.frame = 0
@@ -221,8 +269,8 @@ func _update_sprite_frame_animation(delta: float) -> void:
 		var col := int(_anim_time * 9.0) % ANIM_COLS if ammo < magazine_size else 0
 		body.frame_coords = Vector2i(col, ANIM_ROW_CROUCH)
 		if shadow:
-			shadow.position = Vector2(-8.0, 38.0)
-			shadow.scale = Vector2(1.12 + 0.1 * land_squash, 0.9)
+			shadow.position = Vector2(-10.0, 48.0)
+			shadow.scale = Vector2(1.42 + 0.12 * land_squash, 1.15)
 		return
 
 	# Бойова стійка під час стрільби (+ легке сіпання корпусу назад при отриманні болю)
@@ -234,8 +282,8 @@ func _update_sprite_frame_animation(delta: float) -> void:
 		BASE_SPRITE_SCALE.y * (1.0 - 0.12 * land_squash + 0.04 * hurt_flinch)
 	)
 	if shadow:
-		shadow.position = Vector2(0.0, 38.0)
-		shadow.scale = Vector2.ONE
+		shadow.position = Vector2(0.0, 48.0)
+		shadow.scale = Vector2(1.28, 1.28)
 
 	if _shoot_anim_timer > 0.0:
 		_shoot_anim_timer = maxf(_shoot_anim_timer - delta, 0.0)
@@ -282,6 +330,7 @@ func take_damage(amount: float, ignore_cover: bool = false) -> void:
 		return
 
 	health = maxf(health - amount, 0.0)
+	_hp_trail_hold_timer = 0.30
 	health_changed.emit(health, max_health)
 	_update_hud()
 	_flash_damage()
@@ -291,10 +340,118 @@ func take_damage(amount: float, ignore_cover: bool = false) -> void:
 
 
 func _handle_grenade_input() -> void:
-	if _grenade_cooldown_timer > 0.0 or _grenade_throw_timer > 0.0 or grenades <= 0:
+	if _grenade_cooldown_timer > 0.0 or _grenade_throw_timer > 0.0 or _heal_anim_timer > 0.0 or grenades <= 0:
 		return
 	if Input.is_action_just_pressed("throw_grenade"):
 		_start_grenade_throw()
+
+
+func _handle_heal_input() -> void:
+	if _heal_cooldown_timer > 0.0 or _heal_anim_timer > 0.0 or _grenade_throw_timer > 0.0:
+		return
+	if Input.is_action_just_pressed("use_heal"):
+		_start_heal()
+
+
+func _start_heal() -> void:
+	_heal_cooldown_timer = heal_cooldown
+	_heal_anim_timer = heal_anim_duration
+	_heal_applied = false
+	_combat_expose_timer = heal_anim_duration + 0.06
+	if is_in_cover:
+		_set_cover(false)
+	if reload_sound:
+		reload_sound.pitch_scale = 1.28
+		reload_sound.play()
+	_update_hud()
+
+
+func _get_heal_raise_envelope() -> float:
+	if _heal_anim_timer <= 0.0:
+		return 0.0
+	var prog := clampf(1.0 - (_heal_anim_timer / maxf(heal_anim_duration, 0.1)), 0.0, 1.0)
+	# Як на скріні (22 кадри): кадри 0..4 — підйом гвинтівки вертикально вгору, кадри 4..16 — утримання вертикально над головою, кадри 17..21 — опускання в бойову стійку
+	if prog < 0.22:
+		var t := prog / 0.22
+		return t * t * (3.0 - 2.0 * t)
+	elif prog <= 0.78:
+		var hold_t := (prog - 0.22) / 0.56
+		return 1.0 + 0.04 * sin(hold_t * PI * 2.0)
+	else:
+		var t := (1.0 - prog) / 0.22
+		return clampf(t * t * (3.0 - 2.0 * t), 0.0, 1.0)
+
+
+func _process_heal_anim(delta: float) -> void:
+	_heal_anim_timer = maxf(_heal_anim_timer - delta, 0.0)
+	var prog := clampf(1.0 - (_heal_anim_timer / maxf(heal_anim_duration, 0.1)), 0.0, 1.0)
+	var raise_env := _get_heal_raise_envelope()
+
+	# Стійка бійця під час підняття зброї вгору (як на референсному скріні)
+	body.frame_coords = Vector2i(0, ANIM_ROW_SHOOT)
+	body.position = Vector2(-3.5 * raise_env, -2.5 * raise_env)
+	body.rotation = -0.10 * raise_env
+	body.scale = Vector2(
+		BASE_SPRITE_SCALE.x * (1.0 - 0.03 * raise_env),
+		BASE_SPRITE_SCALE.y * (1.0 + 0.04 * raise_env)
+	)
+	if _damage_tint_timer <= 0.0:
+		var glow := sin(prog * PI) * 0.45
+		body.modulate = Color(1.0 - glow * 0.2, 1.0 + glow * 0.45, 1.0 - glow * 0.2, 1.0)
+		if weapon_sprite:
+			weapon_sprite.modulate = body.modulate
+
+	# На піку підняття пушки (0.26 прогресу) відновлюємо все ХП на 100% і запускаємо ефект лікування
+	if prog >= 0.26 and not _heal_applied:
+		_heal_applied = true
+		health = max_health
+		_hp_trail_ratio = 1.0
+		_hp_trail_hold_timer = 0.0
+		health_changed.emit(health, max_health)
+		_spawn_heal_vfx()
+		_update_hud()
+
+	if _heal_anim_timer <= 0.0:
+		body.position = Vector2.ZERO
+		body.rotation = 0.0
+		body.scale = BASE_SPRITE_SCALE
+		if _damage_tint_timer <= 0.0:
+			body.modulate = Color(0.72, 0.76, 0.80, 0.98) if is_in_cover else Color.WHITE
+			if weapon_sprite:
+				weapon_sprite.modulate = body.modulate
+		_update_hud()
+
+
+func _spawn_heal_vfx() -> void:
+	var parent_node := get_parent()
+	if parent_node == null:
+		return
+
+	# Спливаючі зелені хрестики "+" навколо бійця під час відновлення ХП
+	for i in range(5):
+		var cross := Node2D.new()
+		cross.global_position = global_position + Vector2(randf_range(-28.0, 28.0), randf_range(-36.0, 6.0))
+		cross.z_index = 25
+
+		var h_bar := Polygon2D.new()
+		h_bar.color = Color(0.25, 0.96, 0.42, 0.95)
+		h_bar.polygon = PackedVector2Array([
+			Vector2(-6.0, -2.0), Vector2(6.0, -2.0), Vector2(6.0, 2.0), Vector2(-6.0, 2.0)
+		])
+		cross.add_child(h_bar)
+
+		var v_bar := Polygon2D.new()
+		v_bar.color = Color(0.25, 0.96, 0.42, 0.95)
+		v_bar.polygon = PackedVector2Array([
+			Vector2(-2.0, -6.0), Vector2(2.0, -6.0), Vector2(2.0, 6.0), Vector2(-2.0, 6.0)
+		])
+		cross.add_child(v_bar)
+
+		parent_node.add_child(cross)
+		var tw := cross.create_tween().set_parallel(true)
+		tw.tween_property(cross, "global_position:y", cross.global_position.y - randf_range(28.0, 46.0), 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(cross, "modulate:a", 0.0, 0.55).set_delay(0.12)
+		tw.chain().tween_callback(cross.queue_free)
 
 
 func _start_grenade_throw() -> void:
@@ -413,8 +570,8 @@ func _process_roll(delta: float) -> void:
 	)
 
 	if shadow:
-		shadow.position = Vector2(arc * 12.0, 38.0)
-		shadow.scale = Vector2(1.0 - 0.42 * arc, 1.0 - 0.42 * arc)
+		shadow.position = Vector2(arc * 12.0, 48.0)
+		shadow.scale = Vector2((1.0 - 0.42 * arc) * 1.28, (1.0 - 0.42 * arc) * 1.28)
 
 	_afterimage_timer -= delta
 	if _afterimage_timer <= 0.0 and t < 0.92:
@@ -678,22 +835,194 @@ func _die() -> void:
 	died.emit()
 
 
+func _create_bottom_left_bars() -> void:
+	_hud_layer = CanvasLayer.new()
+	_hud_layer.layer = 5
+	add_child(_hud_layer)
+
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hud_layer.add_child(root)
+
+	# Підкладка внизу зліва екрана (1280x720)
+	var panel := ColorRect.new()
+	panel.position = Vector2(18.0, 600.0)
+	panel.size = Vector2(304.0, 104.0)
+	panel.color = Color(0.06, 0.07, 0.08, 0.78)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(panel)
+
+	var border_top := ColorRect.new()
+	border_top.position = Vector2(0.0, 0.0)
+	border_top.size = Vector2(304.0, 2.0)
+	border_top.color = Color(0.55, 0.48, 0.34, 0.85)
+	border_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(border_top)
+
+	# Верхній рядок підпису стану та гранат
+	_bottom_status_label = Label.new()
+	_bottom_status_label.position = Vector2(12.0, 6.0)
+	_bottom_status_label.size = Vector2(280.0, 22.0)
+	_bottom_status_label.add_theme_font_size_override("font_size", 14)
+	_bottom_status_label.add_theme_color_override("font_color", Color(0.94, 0.90, 0.78, 1.0))
+	_bottom_status_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
+	_bottom_status_label.add_theme_constant_override("outline_size", 4)
+	panel.add_child(_bottom_status_label)
+
+	# 1) ЧЕРВОНИЙ БАР ХП (HP)
+	var hp_frame := ColorRect.new()
+	hp_frame.position = Vector2(10.0, 32.0)
+	hp_frame.size = Vector2(BAR_MAX_WIDTH + 4.0, BAR_HEIGHT + 4.0)
+	hp_frame.color = Color(0.02, 0.02, 0.03, 0.96)
+	hp_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(hp_frame)
+
+	var hp_bg := ColorRect.new()
+	hp_bg.position = Vector2(2.0, 2.0)
+	hp_bg.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
+	hp_bg.color = Color(0.20, 0.06, 0.06, 0.95)
+	hp_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_frame.add_child(hp_bg)
+
+	# Слід просідання ХП (світло-помаранчевий/білий шлейф, що плавно доганяє червоний бар після поранення)
+	_hp_bar_trail = ColorRect.new()
+	_hp_bar_trail.position = Vector2(2.0, 2.0)
+	_hp_bar_trail.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
+	_hp_bar_trail.color = Color(1.0, 0.68, 0.36, 0.92)
+	_hp_bar_trail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_frame.add_child(_hp_bar_trail)
+
+	# Основний червоний бар ХП
+	_hp_bar_main = ColorRect.new()
+	_hp_bar_main.position = Vector2(2.0, 2.0)
+	_hp_bar_main.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
+	_hp_bar_main.color = Color(0.86, 0.16, 0.18, 1.0)
+	_hp_bar_main.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_frame.add_child(_hp_bar_main)
+
+	_hp_bar_label = Label.new()
+	_hp_bar_label.position = Vector2(10.0, 2.0)
+	_hp_bar_label.size = Vector2(BAR_MAX_WIDTH - 16.0, BAR_HEIGHT)
+	_hp_bar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_hp_bar_label.add_theme_font_size_override("font_size", 14)
+	_hp_bar_label.add_theme_color_override("font_color", Color(1.0, 0.97, 0.95, 1.0))
+	_hp_bar_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
+	_hp_bar_label.add_theme_constant_override("outline_size", 4)
+	hp_frame.add_child(_hp_bar_label)
+
+	# 2) СИНІЙ БАР ПАТРОНІВ (AMMO)
+	var ammo_frame := ColorRect.new()
+	ammo_frame.position = Vector2(10.0, 66.0)
+	ammo_frame.size = Vector2(BAR_MAX_WIDTH + 4.0, BAR_HEIGHT + 4.0)
+	ammo_frame.color = Color(0.02, 0.02, 0.03, 0.96)
+	ammo_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(ammo_frame)
+
+	var ammo_bg := ColorRect.new()
+	ammo_bg.position = Vector2(2.0, 2.0)
+	ammo_bg.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
+	ammo_bg.color = Color(0.05, 0.12, 0.22, 0.95)
+	ammo_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ammo_frame.add_child(ammo_bg)
+
+	# Слід витрати патронів під час черги (блакитний шлейф просідання)
+	_ammo_bar_trail = ColorRect.new()
+	_ammo_bar_trail.position = Vector2(2.0, 2.0)
+	_ammo_bar_trail.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
+	_ammo_bar_trail.color = Color(0.58, 0.88, 1.0, 0.85)
+	_ammo_bar_trail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ammo_frame.add_child(_ammo_bar_trail)
+
+	# Основний синій бар патронів (плавно росте при відновленні в окопі)
+	_ammo_bar_main = ColorRect.new()
+	_ammo_bar_main.position = Vector2(2.0, 2.0)
+	_ammo_bar_main.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
+	_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0)
+	_ammo_bar_main.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ammo_frame.add_child(_ammo_bar_main)
+
+	# Яскравий індикатор на краю синього бара під час відновлення патронів
+	_ammo_bar_edge = ColorRect.new()
+	_ammo_bar_edge.position = Vector2(2.0, 2.0)
+	_ammo_bar_edge.size = Vector2(4.0, BAR_HEIGHT)
+	_ammo_bar_edge.color = Color(0.75, 0.96, 1.0, 0.95)
+	_ammo_bar_edge.visible = false
+	_ammo_bar_edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ammo_frame.add_child(_ammo_bar_edge)
+
+	_ammo_bar_label = Label.new()
+	_ammo_bar_label.position = Vector2(10.0, 2.0)
+	_ammo_bar_label.size = Vector2(BAR_MAX_WIDTH - 16.0, BAR_HEIGHT)
+	_ammo_bar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_ammo_bar_label.add_theme_font_size_override("font_size", 14)
+	_ammo_bar_label.add_theme_color_override("font_color", Color(0.95, 0.98, 1.0, 1.0))
+	_ammo_bar_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
+	_ammo_bar_label.add_theme_constant_override("outline_size", 4)
+	ammo_frame.add_child(_ammo_bar_label)
+
+
+func _update_hud_bars(delta: float) -> void:
+	var hp_ratio := clampf(health / maxf(max_health, 1.0), 0.0, 1.0)
+	if hp_ratio < _hp_trail_ratio:
+		if _hp_trail_hold_timer > 0.0:
+			_hp_trail_hold_timer = maxf(_hp_trail_hold_timer - delta, 0.0)
+		else:
+			_hp_trail_ratio = move_toward(_hp_trail_ratio, hp_ratio, delta * 0.48)
+	else:
+		_hp_trail_ratio = hp_ratio
+
+	var is_reloading_now := is_in_cover and not is_rolling and not is_dead and ammo < magazine_size
+	var exact_ammo := clampf(
+		float(ammo) + (_reload_accumulator if is_reloading_now else 0.0),
+		0.0,
+		float(magazine_size)
+	)
+	var ammo_ratio := clampf(exact_ammo / float(maxi(magazine_size, 1)), 0.0, 1.0)
+
+	if ammo_ratio < _ammo_trail_ratio:
+		if _ammo_trail_hold_timer > 0.0:
+			_ammo_trail_hold_timer = maxf(_ammo_trail_hold_timer - delta, 0.0)
+		else:
+			_ammo_trail_ratio = move_toward(_ammo_trail_ratio, ammo_ratio, delta * 0.65)
+	else:
+		_ammo_trail_ratio = ammo_ratio
+
+	if _hp_bar_main:
+		_hp_bar_main.size.x = BAR_MAX_WIDTH * hp_ratio
+	if _hp_bar_trail:
+		_hp_bar_trail.size.x = BAR_MAX_WIDTH * _hp_trail_ratio
+	if _hp_bar_label:
+		_hp_bar_label.text = "ХП: %d / %d" % [int(ceilf(health)), int(roundf(max_health))]
+
+	if _ammo_bar_main:
+		_ammo_bar_main.size.x = BAR_MAX_WIDTH * ammo_ratio
+		if is_reloading_now:
+			var pulse := 0.5 + 0.5 * sin(_anim_time * 10.0)
+			_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0).lerp(Color(0.28, 0.72, 1.0, 1.0), pulse * 0.6)
+		else:
+			_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0)
+	if _ammo_bar_trail:
+		_ammo_bar_trail.size.x = BAR_MAX_WIDTH * _ammo_trail_ratio
+	if _ammo_bar_edge:
+		_ammo_bar_edge.visible = is_reloading_now and ammo_ratio > 0.01 and ammo_ratio < 0.995
+		_ammo_bar_edge.position.x = 2.0 + maxf(BAR_MAX_WIDTH * ammo_ratio - 3.0, 0.0)
+	if _ammo_bar_label:
+		if is_reloading_now:
+			_ammo_bar_label.text = "ПАТРОНИ: %d / %d  (відновлення...)" % [ammo, magazine_size]
+		else:
+			_ammo_bar_label.text = "ПАТРОНИ: %d / %d" % [ammo, magazine_size]
+
+	if _bottom_status_label:
+		var heal_str := "Хілка [2]: ГОТОВА" if _heal_cooldown_timer <= 0.0 else ("Хілка [2]: %dс" % int(ceilf(_heal_cooldown_timer)))
+		_bottom_status_label.text = "Гранати [1]: %d   |   %s" % [grenades, heal_str]
+
+
 func _update_hud() -> void:
 	var hp_ratio := clampf(health / maxf(max_health, 1.0), 0.0, 1.0)
 	health_bar_fill.size.x = 90.0 * hp_ratio
 	health_bar_fill.color = Color(0.22, 0.82, 0.32, 1.0).lerp(Color(0.9, 0.2, 0.2, 1.0), 1.0 - hp_ratio)
-
-	if is_dead:
-		status_label.text = "ЗАГИНУВ"
-	elif is_rolling:
-		status_label.text = "[КУВИРОК] Патрони: %d/%d | Гранати [1]: %d" % [ammo, magazine_size, grenades]
-	elif is_in_cover:
-		if ammo < magazine_size:
-			status_label.text = "[В ОКОПІ] Перезарядка: %d/%d | Гранати [1]: %d" % [ammo, magazine_size, grenades]
-		else:
-			status_label.text = "[В ОКОПІ] Патрони: %d/%d | Гранати [1]: %d" % [ammo, magazine_size, grenades]
-	else:
-		status_label.text = "[ВОГОНЬ!] Патрони: %d/%d | Гранати [1]: %d" % [ammo, magazine_size, grenades]
+	_update_hud_bars(0.0)
 
 
 func _ensure_input_actions() -> void:
@@ -703,6 +1032,12 @@ func _ensure_input_actions() -> void:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = key
 			InputMap.action_add_event("throw_grenade", ev)
+	if not InputMap.has_action("use_heal"):
+		InputMap.add_action("use_heal")
+		for key in [KEY_2, KEY_KP_2]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = key
+			InputMap.action_add_event("use_heal", ev)
 	if not InputMap.has_action("cover"):
 		InputMap.add_action("cover")
 		var ev := InputEventKey.new()

@@ -4,6 +4,8 @@ extends Node
 const GAME_STATE := preload("res://scripts/game_state.gd")
 
 signal wave_started(wave_number: int)
+signal subwave_changed(subwave_number: int, total_subwaves: int)
+signal formation_spawned(unit_type: String, is_v_shape: bool)
 signal wave_cleared
 signal all_waves_cleared
 signal enemy_killed(unit_type: String, world_pos: Vector2, reward: int)
@@ -11,17 +13,18 @@ signal enemy_killed(unit_type: String, world_pos: Vector2, reward: int)
 @export var enemy_scene: PackedScene = preload("res://scenes/enemy.tscn")
 @export var shotgunner_scene: PackedScene = preload("res://scenes/shotgunner.tscn")
 @export var heavy_gunner_scene: PackedScene = preload("res://scenes/heavy_gunner.tscn")
+@export var grenadier_scene: PackedScene = preload("res://scenes/grenadier.tscn")
 @export var sniper_scene: PackedScene = preload("res://scenes/sniper.tscn")
 @export var helicopter_scene: PackedScene = preload("res://scenes/helicopter.tscn")
-@export var spawn_interval := 3.2
-@export var delay_between_waves := 3.5
-@export var infantry_spawn_x := 1295.0
-@export var spawn_y_min := 405.0
-@export var spawn_y_max := 625.0
-@export var sniper_x_min := 820.0
+@export var spawn_interval := 2.3
+@export var delay_between_waves := 3.0
+@export var infantry_spawn_x := 1265.0
+@export var spawn_y_min := 355.0
+@export var spawn_y_max := 595.0
+@export var sniper_x_min := 760.0
 @export var sniper_x_max := 1150.0
-@export var sniper_y_min := 275.0
-@export var sniper_y_max := 315.0
+@export var sniper_y_min := 175.0
+@export var sniper_y_max := 220.0
 @export var auto_start := true
 
 @export var waves: Array[Dictionary] = [
@@ -32,8 +35,19 @@ signal enemy_killed(unit_type: String, world_pos: Vector2, reward: int)
 
 var _current_heli_troops := 4
 var _sniper_spawn_idx := 0
+var _formation_toggle := 0
 
 var current_wave_index := -1
+var current_subwave := 1
+var total_subwaves := 3
+var subwave_ratios: Array[float] = [0.33, 0.67]
+
+var total_level_units := 1
+var spawned_level_units := 0
+var eliminated_level_units := 0
+var total_enemy_soldiers := 1
+var killed_enemy_soldiers := 0
+
 var _spawn_queue: Array[String] = []
 var _alive_enemies: Dictionary = {}
 var _rewarded_enemies: Dictionary = {}
@@ -83,14 +97,33 @@ func get_alive_enemy_count() -> int:
 	return _alive_enemies.size()
 
 
+func get_remaining_enemies_count() -> int:
+	return maxi(total_enemy_soldiers - killed_enemy_soldiers, 0)
+
+
+func get_level_progress_ratio() -> float:
+	if total_level_units <= 0:
+		return 0.0
+	if not _wave_in_progress and _spawn_queue.is_empty() and _alive_enemies.is_empty() and eliminated_level_units > 0:
+		return 1.0
+	var spawned_frac := clampf(float(spawned_level_units) / float(total_level_units), 0.0, 1.0)
+	var killed_frac := clampf(float(eliminated_level_units) / float(total_level_units), 0.0, 1.0)
+	return clampf(killed_frac * 0.72 + spawned_frac * 0.28, 0.0, 1.0)
+
+
 func _start_next_wave() -> void:
 	current_wave_index += 1
 	if current_wave_index >= waves.size():
 		return
 
 	_wave_in_progress = true
+	current_subwave = 1
+	spawned_level_units = 0
+	eliminated_level_units = 0
+	killed_enemy_soldiers = 0
 	_spawn_queue = _build_wave_queue(waves[current_wave_index])
 	wave_started.emit(current_wave_index + 1)
+	subwave_changed.emit(current_subwave, total_subwaves)
 
 	# Спавнимо першого ворога одразу на старті хвилі, решту — за таймером
 	_spawn_next_from_queue()
@@ -103,35 +136,91 @@ func _build_wave_queue(wave_data: Dictionary) -> Array[String]:
 	var infantry_count := int(wave_data.get("infantry", 0))
 	var shotgun_count := int(wave_data.get("shotgun", 0))
 	var heavy_count := int(wave_data.get("heavy", 0))
+	var grenadier_count := int(wave_data.get("grenadier", 0))
 	var sniper_count := int(wave_data.get("snipers", 0))
-	var queue: Array[String] = []
-
-	for i in range(infantry_count):
-		queue.append("infantry")
-
-	# Вставляємо бійців з дробовиками серед хвилі
-	for sh in range(shotgun_count):
-		var sh_idx := mini(1 + sh * 2, queue.size())
-		queue.insert(sh_idx, "shotgun")
-
-	# Вставляємо важких кулеметників серед хвилі піхоти
-	for h in range(heavy_count):
-		var h_idx := mini(2 + h * 3, queue.size())
-		queue.insert(h_idx, "heavy")
-
-	# Вставляємо снайперів рівномірно впродовж рівня, щоб тримали окоп під прицілом зверху справа
-	for s in range(sniper_count):
-		var insert_idx := mini(1 + s * 2, queue.size())
-		queue.insert(insert_idx, "sniper")
-
-	# Вертоліт з десантом прилітає зліва посеред хвилі
 	_current_heli_troops = int(wave_data.get("heli_troops", 4))
 	var heli_count := int(wave_data.get("heli", 0))
-	for hc in range(heli_count):
-		var heli_idx := mini(2 + hc * 5, queue.size())
-		queue.insert(heli_idx, "heli")
+
+	total_enemy_soldiers = infantry_count + shotgun_count + heavy_count + grenadier_count + sniper_count + (heli_count * clampi(_current_heli_troops, 1, 8))
+	total_level_units = maxi(total_enemy_soldiers + heli_count, 1)
+
+	# Формуємо загони по 5 ворогів одного типу (у вигляді V або в лінію), а решту залишаємо по одному
+	var formations: Array[String] = []
+	var max_infantry_formations := clampi(infantry_count / 7, 1, 3) if infantry_count >= 10 else 0
+	for f in range(max_infantry_formations):
+		if infantry_count >= 5:
+			infantry_count -= 5
+			var shape := "v" if ((_formation_toggle + f) % 2 == 0) else "line"
+			formations.append("formation_%s:infantry" % shape)
+	_formation_toggle += max_infantry_formations
+
+	if shotgun_count >= 7:
+		shotgun_count -= 5
+		var sh_shape := "line" if (_formation_toggle % 2 == 0) else "v"
+		formations.append("formation_%s:shotgun" % sh_shape)
+		_formation_toggle += 1
+
+	var single_pool: Array[String] = []
+	for i in range(infantry_count):
+		single_pool.append("infantry")
+
+	# Рівномірно розподіляємо всі типи ворогів (дробовики, червоні важкі кулеметники, гранатометники, снайпери) по всій довжині рівня,
+	# щоб вони гарантовано виходили в кожній хвилі
+	_insert_evenly(single_pool, "shotgun", shotgun_count, 1)
+	_insert_evenly(single_pool, "heavy", heavy_count, 1)
+	_insert_evenly(single_pool, "grenadier", grenadier_count, 2)
+	_insert_evenly(single_pool, "sniper", sniper_count, 1)
+	_insert_evenly(single_pool, "heli", heli_count, 3)
+
+	# Розбиваємо рівень на 3 або 4 хвилі (subwaves) і вставляємо строї по 5 бійців у хвилі
+	total_subwaves = 4 if GAME_STATE.current_level >= 8 else 3
+	subwave_ratios.clear()
+	for w in range(1, total_subwaves):
+		subwave_ratios.append(float(w) / float(total_subwaves))
+
+	var queue: Array[String] = []
+	var total_singles := single_pool.size()
+	var single_cursor := 0
+
+	for w in range(total_subwaves):
+		var remaining_waves := total_subwaves - w
+		var chunk_size := int(ceil(float(total_singles - single_cursor) / float(remaining_waves)))
+		var sub_items: Array[String] = []
+		for k in range(chunk_size):
+			if single_cursor < total_singles:
+				sub_items.append(single_pool[single_cursor])
+				single_cursor += 1
+
+		# Додаємо стрій з 5 ворогів (V або в лінію) всередину хвилі (переважно у 2-гу, 3-тю, 4-ту хвилі, або і в 1-шу якщо строїв багато)
+		if not formations.is_empty() and (w >= 1 or formations.size() >= total_subwaves):
+			var form_cmd: String = formations.pop_front()
+			var form_insert := clampi(sub_items.size() / 2, 1, maxi(sub_items.size(), 1))
+			if sub_items.is_empty():
+				sub_items.append(form_cmd)
+			else:
+				sub_items.insert(form_insert, form_cmd)
+
+		for item in sub_items:
+			queue.append(item)
+
+		if w < total_subwaves - 1:
+			queue.append("wave_break")
+
+	# Якщо залишився ще якийсь стрій з 5 ворогів — додаємо перед фіналом
+	while not formations.is_empty():
+		queue.append(formations.pop_front())
 
 	return queue
+
+
+func _insert_evenly(pool: Array[String], unit_name: String, count: int, start_offset: int = 1) -> void:
+	if count <= 0:
+		return
+	for i in range(count):
+		var cur_len := pool.size()
+		var ratio := (float(i) + 0.5) / float(count)
+		var idx := clampi(int(roundf(ratio * float(cur_len))), mini(start_offset, cur_len), cur_len)
+		pool.insert(idx, unit_name)
 
 
 func _on_spawn_timer_timeout() -> void:
@@ -146,17 +235,32 @@ func _spawn_next_from_queue() -> void:
 		return
 
 	var unit_type: String = _spawn_queue.pop_front()
+	if unit_type == "wave_break":
+		current_subwave = mini(current_subwave + 1, total_subwaves)
+		subwave_changed.emit(current_subwave, total_subwaves)
+		if not _spawn_queue.is_empty() and _spawn_timer:
+			# Коротка пауза між хвилями всередині рівня
+			_spawn_timer.start(maxf(spawn_interval * 1.85, 2.5))
+		return
+
+	if unit_type.begins_with("formation_"):
+		var parts := unit_type.split(":")
+		var is_v_shape := (parts[0] == "formation_v")
+		var f_unit_type := parts[1] if parts.size() > 1 else "infantry"
+		_spawn_five_formation(f_unit_type, is_v_shape)
+		if not _spawn_queue.is_empty() and _spawn_timer:
+			# Невелика пауза після виходу загону з 5 ворогів
+			_spawn_timer.start(spawn_interval * 1.65)
+		return
+
+	if not _spawn_queue.is_empty() and _spawn_timer and not is_equal_approx(_spawn_timer.wait_time, spawn_interval):
+		_spawn_timer.wait_time = spawn_interval
+
 	if unit_type == "heli":
 		_spawn_helicopter()
 		return
 
-	var packed: PackedScene = enemy_scene
-	if unit_type == "sniper":
-		packed = sniper_scene
-	elif unit_type == "heavy":
-		packed = heavy_gunner_scene
-	elif unit_type == "shotgun":
-		packed = shotgunner_scene
+	var packed: PackedScene = _get_scene_for_type(unit_type)
 	if packed == null:
 		return
 
@@ -168,14 +272,14 @@ func _spawn_next_from_queue() -> void:
 		# Розподіляємо снайперів вздовж верхнього пагорба, щоб вони не накладалися один на одного
 		var slot := _sniper_spawn_idx % 6
 		_sniper_spawn_idx += 1
-		var slot_x := lerpf(765.0, 1205.0, float(slot) / 5.0) + randf_range(-24.0, 24.0)
+		var slot_x := lerpf(740.0, 1185.0, float(slot) / 5.0) + randf_range(-24.0, 24.0)
 		var slot_y := lerpf(sniper_y_min, sniper_y_max, float((slot * 3) % 5) / 4.0) + randf_range(-6.0, 6.0)
-		unit.global_position = Vector2(clampf(slot_x, 750.0, 1220.0), clampf(slot_y, 265.0, 326.0))
+		unit.global_position = Vector2(clampf(slot_x, 725.0, 1210.0), clampf(slot_y, 165.0, 230.0))
 	elif unit_type == "heavy":
-		# Важкий кулеметник виходить на лінію окопу (y: 435..615), щоб його пряма черга з 8 червоних куль летіла впоперек окопу
+		# Важкий кулеметник виходить на лінію окопу (y: 390..585), щоб його пряма черга з 8 червоних куль летіла впоперек окопу
 		unit.global_position = Vector2(
 			infantry_spawn_x,
-			randf_range(435.0, 615.0)
+			randf_range(390.0, 585.0)
 		)
 	else:
 		unit.global_position = Vector2(
@@ -189,18 +293,61 @@ func _spawn_next_from_queue() -> void:
 	container.add_child(unit)
 
 
+## Спавнить одразу 5 ворогів одного типу у вигляді клину (V) або вертикальної шеренги (в лінію)
+func _spawn_five_formation(unit_type: String, is_v_shape: bool) -> void:
+	var packed := _get_scene_for_type(unit_type)
+	if packed == null:
+		return
+
+	var container := get_parent() if get_parent() != null else get_tree().current_scene
+	if container == null:
+		return
+
+	# 5 рівномірних вертикальних рядів поперек поля бою
+	var row_ys: Array[float] = [368.0, 422.0, 476.0, 530.0, 584.0]
+	var base_stop_x := 705.0
+	if unit_type == "shotgun":
+		base_stop_x = 635.0
+	elif unit_type == "heavy":
+		base_stop_x = 755.0
+	elif unit_type == "grenadier":
+		base_stop_x = 895.0
+
+	for i in range(5):
+		var unit := packed.instantiate() as Node2D
+		if unit == null:
+			continue
+
+		var dist_from_center := absf(float(i - 2)) # 0 для центру (i=2), 1 для сусідніх (i=1,3), 2 для крайніх (i=0,4)
+		var x_shift := (dist_from_center * 58.0) if is_v_shape else 0.0
+		var spawn_x := infantry_spawn_x + x_shift
+		var target_stop_x := (base_stop_x - 58.0 + dist_from_center * 58.0) if is_v_shape else base_stop_x
+
+		unit.global_position = Vector2(spawn_x, row_ys[i])
+		if unit.has_method("set_custom_stop_x"):
+			unit.set_custom_stop_x(target_stop_x)
+
+		_register_unit(unit, unit_type)
+		container.add_child(unit)
+
+	formation_spawned.emit(unit_type, is_v_shape)
+
+
 func _get_scene_for_type(unit_type: String) -> PackedScene:
 	match unit_type:
 		"sniper":
 			return sniper_scene
 		"heavy":
 			return heavy_gunner_scene
+		"grenadier":
+			return grenadier_scene
 		"shotgun":
 			return shotgunner_scene
 	return enemy_scene
 
 
 func _register_unit(unit: Node2D, unit_type: String = "infantry") -> void:
+	spawned_level_units += 1
 	var hp_mult := GAME_STATE.get_enemy_hp_multiplier(maxi(current_wave_index, 0))
 	if "health" in unit:
 		unit.health = roundf(float(unit.health) * hp_mult)
@@ -214,6 +361,7 @@ func _register_unit(unit: Node2D, unit_type: String = "infantry") -> void:
 func _on_unit_died(instance_id: int, unit: Node2D, unit_type: String) -> void:
 	if not _rewarded_enemies.has(instance_id):
 		_rewarded_enemies[instance_id] = true
+		killed_enemy_soldiers += 1
 		var pos := unit.global_position if is_instance_valid(unit) else Vector2(640.0, 480.0)
 		var reward := GAME_STATE.get_kill_reward(unit_type)
 		enemy_killed.emit(unit_type, pos, reward)
@@ -237,6 +385,7 @@ func _spawn_helicopter() -> void:
 	heli.trooper_drop_requested.connect(_on_heli_trooper_drop.bind(heli))
 
 	# Вертоліт рахується "живим", доки не висадить усіх і не полетить — щоб хвиля не завершилась передчасно
+	spawned_level_units += 1
 	var id := heli.get_instance_id()
 	_alive_enemies[id] = true
 	heli.tree_exited.connect(_on_enemy_eliminated.bind(id), CONNECT_ONE_SHOT)
@@ -266,6 +415,7 @@ func _on_enemy_eliminated(instance_id: int) -> void:
 	if not _alive_enemies.has(instance_id):
 		return
 	_alive_enemies.erase(instance_id)
+	eliminated_level_units += 1
 	_check_wave_cleared()
 
 
