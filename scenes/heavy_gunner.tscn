@@ -34,7 +34,7 @@ scale = Vector2(0.64, 0.64)
 texture = ExtResource("2_heavy_sheet")
 offset = Vector2(-50, -6)
 hframes = 12
-vframes = 4
+vframes = 6
 
 [node name="ShotLine" type="Line2D" parent="." unique_id=191300405]
 top_level = true
