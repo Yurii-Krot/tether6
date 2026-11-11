@@ -38,6 +38,8 @@ const TILE_HALF_WIDTH := 42.0
 @export var use_trench_tile_launcher := false
 @export var trench_launcher_rocket_count := 1
 @export var is_boss := false
+## Швидкість програвання 24-кадрового циклу бігу (кадрів/с). 21 ≈ темп референсного відео (цикл ≈ 1.15 с)
+@export var run_anim_fps := 24.0
 
 var state: State = State.ADVANCE
 var _max_health := 80.0
@@ -324,7 +326,7 @@ func _update_sprite_animation(delta: float) -> void:
 	if state == State.ADVANCE:
 		if is_six_row:
 			# 24-кадрова покадрова анімація бігу у 2 рядках (Рядок 0 + Рядок 1, по 12 кадрів у кожному)
-			var walk_fps_24 := 24.0
+			var walk_fps_24 := run_anim_fps
 			var total_walk_frames := cols * 2
 			var step_idx := int(_anim_time * walk_fps_24) % total_walk_frames
 			var w_row := step_idx / cols
