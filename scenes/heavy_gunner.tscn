@@ -10,7 +10,7 @@ size = Vector2(80, 128)
 collision_mask = 0
 script = ExtResource("1_enemy")
 health = 140.0
-speed = 92.0
+speed = 145.0
 stop_distance = 570.0
 attack_interval = 2.6
 attack_damage = 8.0
@@ -19,6 +19,7 @@ burst_count = 8
 burst_interval = 0.12
 shoot_straight = true
 use_red_bullet = true
+run_anim_fps = 24.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=191300402]
 shape = SubResource("RectangleShape2D_heavy")

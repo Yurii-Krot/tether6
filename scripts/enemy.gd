@@ -16,6 +16,7 @@ const ENEMY_ROW_HURT := 2
 const ENEMY_ROW_DEATH := 3
 
 const GRENADIER_ROCKET_SCRIPT := preload("res://scripts/grenadier_rocket.gd")
+const AXE_PROJECTILE_SCRIPT := preload("res://scripts/axe_projectile.gd")
 const WARNING_BEEP_STREAM := preload("res://assets/warning_beep.mp3")
 const TRENCH_TILES_Y: Array[float] = [395.0, 495.0, 595.0]
 const TILE_HALF_HEIGHT := 48.0
@@ -37,6 +38,8 @@ const TILE_HALF_WIDTH := 42.0
 @export var use_sniper_laser := false
 @export var use_trench_tile_launcher := false
 @export var trench_launcher_rocket_count := 1
+@export var use_axe_throw := false
+@export var axe_flight_duration := 0.85
 @export var is_boss := false
 ## Швидкість програвання 24-кадрового циклу бігу (кадрів/с). 21 ≈ темп референсного відео (цикл ≈ 1.15 с)
 @export var run_anim_fps := 24.0
@@ -120,6 +123,8 @@ func _ready() -> void:
 	elif pellet_count > 1:
 		# Довша тривалість анімації пострілу дробовика, щоб було добре видно пересмикування помпової цівки та виліт гільзи
 		_shoot_anim_duration = 0.48
+	elif use_axe_throw:
+		_shoot_anim_duration = 0.52
 	if shot_line:
 		shot_line.visible = false
 	if body_rect:
@@ -404,6 +409,8 @@ func _process_attack(delta: float) -> void:
 	if body_sprite != null:
 		if use_sniper_laser:
 			muzzle_offset = Vector2(-114.0, -8.0)
+		elif use_axe_throw:
+			muzzle_offset = Vector2(-68.0, -24.0)
 		elif use_trench_tile_launcher:
 			muzzle_offset = Vector2(-144.0, -9.0) if is_boss else Vector2(-82.0, -5.0)
 		elif shoot_straight or burst_count > 1:
@@ -426,9 +433,9 @@ func _process_attack(delta: float) -> void:
 		return
 
 	_attack_timer -= delta
-	var lock_window := 0.30 if use_trench_tile_launcher else (0.85 if use_sniper_laser else 0.38)
+	var lock_window := 0.0 if use_axe_throw else (0.30 if use_trench_tile_launcher else (0.85 if use_sniper_laser else 0.38))
 
-	if not shoot_straight and _attack_timer <= lock_window and _attack_timer > 0.0 and not _has_locked_aim:
+	if not shoot_straight and not use_axe_throw and _attack_timer <= lock_window and _attack_timer > 0.0 and not _has_locked_aim:
 		if use_trench_tile_launcher:
 			_locked_aim_positions = _choose_trench_tile_targets(maxi(trench_launcher_rocket_count, 1))
 			_locked_aim_pos = _locked_aim_positions[0] if not _locked_aim_positions.is_empty() else _choose_trench_tile_target()
@@ -458,7 +465,7 @@ func _process_attack(delta: float) -> void:
 
 func _perform_attack(muzzle_pos: Vector2) -> void:
 	var player := _find_player()
-	if player == null and not shoot_straight and not use_trench_tile_launcher:
+	if player == null and not shoot_straight and not use_trench_tile_launcher and not use_axe_throw:
 		return
 
 	# Запускаємо анімацію пострілу ворога та звук пострілу (якщо заданий)
@@ -466,11 +473,20 @@ func _perform_attack(muzzle_pos: Vector2) -> void:
 	if body_sprite:
 		var is_six_row := body_sprite.vframes >= 6
 		body_sprite.frame_coords = Vector2i(1 if is_six_row else 0, 2 if is_six_row else ENEMY_ROW_SHOOT)
-		if not use_trench_tile_launcher:
+		if not use_trench_tile_launcher and not use_axe_throw:
 			_spawn_enemy_shell()
-	if shot_sound:
+	if shot_sound and shot_sound.stream != null:
 		shot_sound.pitch_scale = randf_range(0.76, 0.84) if use_trench_tile_launcher else (randf_range(0.96, 1.04) if not use_sniper_laser else randf_range(0.98, 1.02))
 		shot_sound.play()
+
+	if use_axe_throw:
+		var target_tile := _choose_trench_tile_target()
+		var parent_node := get_parent()
+		if parent_node != null:
+			var axe: Node2D = AXE_PROJECTILE_SCRIPT.new()
+			axe.setup(muzzle_pos, target_tile, attack_damage, axe_flight_duration)
+			parent_node.add_child(axe)
+		return
 
 	if use_trench_tile_launcher:
 		var targets := _locked_aim_positions if (_has_locked_aim and not _locked_aim_positions.is_empty()) else _choose_trench_tile_targets(maxi(trench_launcher_rocket_count, 1))

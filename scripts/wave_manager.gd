@@ -15,6 +15,7 @@ signal enemy_killed(unit_type: String, world_pos: Vector2, reward: int)
 @export var shotgunner_scene: PackedScene = preload("res://scenes/shotgunner.tscn")
 @export var heavy_gunner_scene: PackedScene = preload("res://scenes/heavy_gunner.tscn")
 @export var grenadier_scene: PackedScene = preload("res://scenes/grenadier.tscn")
+@export var axe_thrower_scene: PackedScene = preload("res://scenes/axe_thrower.tscn")
 @export var boss_grenadier_scene: PackedScene = preload("res://scenes/boss_grenadier.tscn")
 @export var sniper_scene: PackedScene = preload("res://scenes/sniper.tscn")
 @export var helicopter_scene: PackedScene = preload("res://scenes/helicopter.tscn")
@@ -169,11 +170,12 @@ func _build_wave_queue(wave_data: Dictionary) -> Array[String]:
 	var shotgun_count := int(wave_data.get("shotgun", 0))
 	var heavy_count := int(wave_data.get("heavy", 0))
 	var grenadier_count := int(wave_data.get("grenadier", 0))
+	var axe_count := int(wave_data.get("axe", 0))
 	var sniper_count := int(wave_data.get("snipers", 0))
 	_current_heli_troops = int(wave_data.get("heli_troops", 4))
 	var heli_count := int(wave_data.get("heli", 0))
 
-	total_enemy_soldiers = infantry_count + shotgun_count + heavy_count + grenadier_count + sniper_count + (heli_count * clampi(_current_heli_troops, 1, 8))
+	total_enemy_soldiers = infantry_count + shotgun_count + heavy_count + grenadier_count + axe_count + sniper_count + (heli_count * clampi(_current_heli_troops, 1, 8))
 	total_level_units = maxi(total_enemy_soldiers + heli_count, 1)
 
 	# Формуємо загони по 5 ворогів одного типу (у вигляді V або в лінію), а решту залишаємо по одному
@@ -192,6 +194,14 @@ func _build_wave_queue(wave_data: Dictionary) -> Array[String]:
 		formations.append("formation_%s:shotgun" % sh_shape)
 		_formation_toggle += 1
 
+	var max_axe_formations := clampi(axe_count / 6, 1, 2) if axe_count >= 5 else 0
+	for a in range(max_axe_formations):
+		if axe_count >= 5:
+			axe_count -= 5
+			var axe_shape := "line" if ((_formation_toggle + a) % 2 == 0) else "v"
+			formations.append("formation_%s:axe" % axe_shape)
+	_formation_toggle += max_axe_formations
+
 	var single_pool: Array[String] = []
 	for i in range(infantry_count):
 		single_pool.append("infantry")
@@ -201,6 +211,7 @@ func _build_wave_queue(wave_data: Dictionary) -> Array[String]:
 	_insert_evenly(single_pool, "shotgun", shotgun_count, 1)
 	_insert_evenly(single_pool, "heavy", heavy_count, 1)
 	_insert_evenly(single_pool, "grenadier", grenadier_count, 2)
+	_insert_evenly(single_pool, "axe", axe_count, 2)
 	_insert_evenly(single_pool, "sniper", sniper_count, 1)
 	_insert_evenly(single_pool, "heli", heli_count, 3)
 
@@ -344,6 +355,8 @@ func _spawn_five_formation(unit_type: String, is_v_shape: bool) -> void:
 		base_stop_x = 755.0
 	elif unit_type == "grenadier":
 		base_stop_x = 895.0
+	elif unit_type == "axe":
+		base_stop_x = 460.0
 
 	for i in range(5):
 		var unit := packed.instantiate() as Node2D
@@ -375,6 +388,8 @@ func _get_scene_for_type(unit_type: String) -> PackedScene:
 			return heavy_gunner_scene
 		"grenadier":
 			return grenadier_scene
+		"axe":
+			return axe_thrower_scene
 		"shotgun":
 			return shotgunner_scene
 	return enemy_scene
@@ -416,8 +431,8 @@ func _spawn_helicopter() -> void:
 	if heli == null:
 		return
 
-	# Різний десант: суміш піхоти, дробовиків та важких кулеметників
-	var pool: Array[String] = ["infantry", "infantry", "shotgun", "shotgun", "heavy"]
+	# Різний десант: суміш піхоти, дробовиків, метальників сокири та важких кулеметників
+	var pool: Array[String] = ["infantry", "infantry", "shotgun", "axe", "heavy"]
 	pool.shuffle()
 	var troops: Array[String] = []
 	for i in range(clampi(_current_heli_troops, 1, 8)):
@@ -498,7 +513,7 @@ func _on_boss_minion_timer_timeout() -> void:
 
 	var available_slots := 3 - alive_minions
 	var to_spawn := mini(randi_range(1, 2), available_slots)
-	var minion_types: Array[String] = ["infantry", "shotgun", "heavy", "grenadier", "sniper"]
+	var minion_types: Array[String] = ["infantry", "shotgun", "heavy", "grenadier", "axe", "sniper"]
 	var container := get_parent() if get_parent() != null else get_tree().current_scene
 	if container == null:
 		return

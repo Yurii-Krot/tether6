@@ -7,7 +7,6 @@ const BATTLE_SCENE_PATH := "res://scenes/main.tscn"
 const UPGRADE_DEFS: Array[Dictionary] = [
 	{"key": "hp", "title": "Здоров'я героя (HP)"},
 	{"key": "damage", "title": "Урон кулі гвинтівки"},
-	{"key": "grenades", "title": "Кількість гранат"},
 	{"key": "coins", "title": "Монети з ворогів"},
 ]
 
@@ -152,11 +151,6 @@ func _format_upgrade_stat(key: String, lvl: int) -> String:
 			if lvl >= max_lvl:
 				return "%d урону" % cur
 			return "%d -> %d урону" % [cur, cur + 3]
-		"grenades":
-			var cur := 3 + lvl
-			if lvl >= max_lvl:
-				return "%d шт." % cur
-			return "%d -> %d шт." % [cur, cur + 1]
 		"coins":
 			var cur := lvl * 20
 			if lvl >= max_lvl:

@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://caxethrower01"]
+
+[ext_resource type="Script" uid="uid://b0j1rpe7d22dc" path="res://scripts/enemy.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/axe_thrower_spritesheet.png" id="2_axe_sheet"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_axe_thrower"]
+size = Vector2(70, 122)
+
+[node name="AxeThrower" type="CharacterBody2D" unique_id=191500601]
+collision_mask = 0
+script = ExtResource("1_enemy")
+health = 100.0
+speed = 175.0
+stop_distance = 270.0
+attack_interval = 2.0
+attack_damage = 30.0
+use_axe_throw = true
+axe_flight_duration = 0.85
+run_anim_fps = 24.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=191500602]
+shape = SubResource("RectangleShape2D_axe_thrower")
+
+[node name="Shadow" type="Polygon2D" parent="." unique_id=191500603]
+position = Vector2(0, 56)
+scale = Vector2(1.24, 1.24)
+color = Color(0, 0, 0, 0.4)
+polygon = PackedVector2Array(-30, 0, -21, -6, 0, -8.5, 21, -6, 30, 0, 21, 6, 0, 8.5, -21, 6)
+
+[node name="BodySprite" type="Sprite2D" parent="." unique_id=191500604]
+scale = Vector2(0.62, 0.62)
+texture = ExtResource("2_axe_sheet")
+offset = Vector2(-24, -8)
+hframes = 12
+vframes = 6
+
+[node name="ShotLine" type="Line2D" parent="." unique_id=191500605]
+top_level = true
+visible = false
+width = 2.0
+default_color = Color(1, 0.68, 0.2, 0.9)
+
+[node name="ShotSound" type="AudioStreamPlayer" parent="." unique_id=191500606]
+volume_db = -4.0
+max_polyphony = 2

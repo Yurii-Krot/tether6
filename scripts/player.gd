@@ -27,6 +27,8 @@ const ANIM_ROW_ROLL := 3
 @export var bullet_speed := 1380.0
 @export var magazine_size := 30
 @export var reload_time := 3.5
+@export var empty_hold_reload_multiplier := 0.25
+@export var trickle_penalty_duration := 0.85
 @export var max_health := 100.0
 @export var recoil_distance := 4.5
 @export var recoil_recovery_speed := 45.0
@@ -39,8 +41,7 @@ const ANIM_ROW_ROLL := 3
 @export var roll_cooldown := 0.07
 
 @export_group("Grenade")
-@export var max_grenades := 3
-@export var grenade_cooldown := 1.6
+@export var grenade_cooldown := 30.0
 @export var grenade_throw_distance := 540.0
 @export var grenade_damage := 140.0
 @export var grenade_radius := 265.0
@@ -50,7 +51,6 @@ const ANIM_ROW_ROLL := 3
 @export var heal_anim_duration := 0.85
 
 var ammo := 30
-var grenades := 3
 var health := 100.0
 var cooldown := 0.0
 # У стані спокою боєць за замовчуванням захований в окопі (не отримує урон)
@@ -59,6 +59,8 @@ var is_rolling := false
 var is_dead := false
 
 var _reload_accumulator := 0.0
+var _mag_was_empty := false
+var _trickle_reload_timer := 0.0
 var _flash_timer := 0.0
 var _recoil_offset := 0.0
 var _recoil_angle := 0.0
@@ -122,10 +124,8 @@ func _ready() -> void:
 
 	max_health = GAME_STATE.get_player_max_health()
 	damage = GAME_STATE.get_player_bullet_damage()
-	max_grenades = GAME_STATE.get_player_max_grenades()
 
 	ammo = magazine_size
-	grenades = max_grenades
 	health = max_health
 	_hp_trail_ratio = 1.0
 	_ammo_trail_ratio = 1.0
@@ -155,6 +155,7 @@ func _process(delta: float) -> void:
 	_hurt_flinch_timer = maxf(_hurt_flinch_timer - delta, 0.0)
 	_grenade_cooldown_timer = maxf(_grenade_cooldown_timer - delta, 0.0)
 	_heal_cooldown_timer = maxf(_heal_cooldown_timer - delta, 0.0)
+	_trickle_reload_timer = maxf(_trickle_reload_timer - delta, 0.0)
 
 	if is_rolling:
 		_process_roll(delta)
@@ -191,12 +192,17 @@ func _process(delta: float) -> void:
 	if not is_rolling and _heal_anim_timer <= 0.0:
 		_update_sprite_frame_animation(delta)
 
-	if is_in_cover and not is_rolling:
+	if is_in_cover or is_rolling:
 		_process_reload_in_cover(delta)
 	else:
 		_reload_accumulator = 0.0
 		if wants_to_shoot and cooldown <= 0.0 and ammo > 0:
+			var shooting_trickle := _mag_was_empty and ammo <= 3
 			ammo -= 1
+			if ammo <= 0:
+				_mag_was_empty = true
+			if shooting_trickle:
+				_trickle_reload_timer = trickle_penalty_duration
 			_ammo_trail_hold_timer = 0.18
 			cooldown = 1.0 / fire_rate
 			shoot(mouse_pos)
@@ -340,7 +346,7 @@ func take_damage(amount: float, ignore_cover: bool = false) -> void:
 
 
 func _handle_grenade_input() -> void:
-	if _grenade_cooldown_timer > 0.0 or _grenade_throw_timer > 0.0 or _heal_anim_timer > 0.0 or grenades <= 0:
+	if _grenade_cooldown_timer > 0.0 or _grenade_throw_timer > 0.0 or _heal_anim_timer > 0.0:
 		return
 	if Input.is_action_just_pressed("throw_grenade"):
 		_start_grenade_throw()
@@ -455,7 +461,6 @@ func _spawn_heal_vfx() -> void:
 
 
 func _start_grenade_throw() -> void:
-	grenades -= 1
 	_grenade_cooldown_timer = grenade_cooldown
 	_grenade_throw_timer = _grenade_throw_duration
 	_grenade_launched = false
@@ -686,16 +691,26 @@ func _set_cover(active: bool) -> void:
 	_update_hud()
 
 
+func _is_slow_reloading() -> bool:
+	var trying_to_shoot := Input.is_action_pressed("shoot") and not Input.is_action_pressed("cover")
+	return _mag_was_empty and (trying_to_shoot or _trickle_reload_timer > 0.0)
+
+
 func _process_reload_in_cover(delta: float) -> void:
 	if ammo >= magazine_size:
+		_mag_was_empty = false
 		return
 
 	var bullets_per_sec := float(magazine_size) / maxf(reload_time, 0.05)
+	if _is_slow_reloading():
+		bullets_per_sec *= clampf(empty_hold_reload_multiplier, 0.05, 1.0)
 	_reload_accumulator += delta * bullets_per_sec
 	var added := int(_reload_accumulator)
 	if added > 0:
 		_reload_accumulator -= float(added)
 		ammo = mini(ammo + added, magazine_size)
+		if ammo >= 4 or ammo == magazine_size:
+			_mag_was_empty = false
 		ammo_changed.emit(ammo, magazine_size)
 		if ammo == magazine_size:
 			_reload_accumulator = 0.0
@@ -860,11 +875,11 @@ func _create_bottom_left_bars() -> void:
 	border_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(border_top)
 
-	# Верхній рядок підпису стану та гранат
+	# Верхній рядок підпису гранати та хілки
 	_bottom_status_label = Label.new()
-	_bottom_status_label.position = Vector2(12.0, 6.0)
-	_bottom_status_label.size = Vector2(280.0, 22.0)
-	_bottom_status_label.add_theme_font_size_override("font_size", 14)
+	_bottom_status_label.position = Vector2(10.0, 6.0)
+	_bottom_status_label.size = Vector2(288.0, 22.0)
+	_bottom_status_label.add_theme_font_size_override("font_size", 13)
 	_bottom_status_label.add_theme_color_override("font_color", Color(0.94, 0.90, 0.78, 1.0))
 	_bottom_status_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
 	_bottom_status_label.add_theme_constant_override("outline_size", 4)
@@ -972,7 +987,7 @@ func _update_hud_bars(delta: float) -> void:
 	else:
 		_hp_trail_ratio = hp_ratio
 
-	var is_reloading_now := is_in_cover and not is_rolling and not is_dead and ammo < magazine_size
+	var is_reloading_now := (is_in_cover or is_rolling) and not is_dead and ammo < magazine_size
 	var exact_ammo := clampf(
 		float(ammo) + (_reload_accumulator if is_reloading_now else 0.0),
 		0.0,
@@ -995,11 +1010,15 @@ func _update_hud_bars(delta: float) -> void:
 	if _hp_bar_label:
 		_hp_bar_label.text = "ХП: %d / %d" % [int(ceilf(health)), int(roundf(max_health))]
 
+	var is_slow_reload := is_reloading_now and _is_slow_reloading()
 	if _ammo_bar_main:
 		_ammo_bar_main.size.x = BAR_MAX_WIDTH * ammo_ratio
 		if is_reloading_now:
 			var pulse := 0.5 + 0.5 * sin(_anim_time * 10.0)
-			_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0).lerp(Color(0.28, 0.72, 1.0, 1.0), pulse * 0.6)
+			if is_slow_reload:
+				_ammo_bar_main.color = Color(0.90, 0.45, 0.14, 1.0).lerp(Color(1.0, 0.68, 0.24, 1.0), pulse * 0.55)
+			else:
+				_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0).lerp(Color(0.28, 0.72, 1.0, 1.0), pulse * 0.6)
 		else:
 			_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0)
 	if _ammo_bar_trail:
@@ -1008,14 +1027,17 @@ func _update_hud_bars(delta: float) -> void:
 		_ammo_bar_edge.visible = is_reloading_now and ammo_ratio > 0.01 and ammo_ratio < 0.995
 		_ammo_bar_edge.position.x = 2.0 + maxf(BAR_MAX_WIDTH * ammo_ratio - 3.0, 0.0)
 	if _ammo_bar_label:
-		if is_reloading_now:
+		if is_slow_reload:
+			_ammo_bar_label.text = "ПАТРОНИ: %d / %d  (повільне відновлення...)" % [ammo, magazine_size]
+		elif is_reloading_now:
 			_ammo_bar_label.text = "ПАТРОНИ: %d / %d  (відновлення...)" % [ammo, magazine_size]
 		else:
 			_ammo_bar_label.text = "ПАТРОНИ: %d / %d" % [ammo, magazine_size]
 
 	if _bottom_status_label:
+		var gren_str := "Граната [1]: ГОТОВА" if _grenade_cooldown_timer <= 0.0 else ("Граната [1]: %dс" % int(ceilf(_grenade_cooldown_timer)))
 		var heal_str := "Хілка [2]: ГОТОВА" if _heal_cooldown_timer <= 0.0 else ("Хілка [2]: %dс" % int(ceilf(_heal_cooldown_timer)))
-		_bottom_status_label.text = "Гранати [1]: %d   |   %s" % [grenades, heal_str]
+		_bottom_status_label.text = "%s | %s" % [gren_str, heal_str]
 
 
 func _update_hud() -> void:

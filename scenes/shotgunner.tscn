@@ -10,13 +10,14 @@ size = Vector2(74, 122)
 collision_mask = 0
 script = ExtResource("1_enemy")
 health = 100.0
-speed = 135.0
+speed = 160.0
 stop_distance = 450.0
 attack_interval = 2.1
 attack_damage = 7.0
 projectile_speed = 560.0
 pellet_count = 5
 spread_angle_deg = 28.0
+run_anim_fps = 28.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=191400402]
 shape = SubResource("RectangleShape2D_shotgun")
@@ -32,7 +33,7 @@ scale = Vector2(0.62, 0.62)
 texture = ExtResource("2_shotgun_sheet")
 offset = Vector2(-34, -6)
 hframes = 12
-vframes = 4
+vframes = 6
 
 [node name="ShotLine" type="Line2D" parent="." unique_id=191400405]
 top_level = true
