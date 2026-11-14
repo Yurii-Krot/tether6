@@ -150,7 +150,6 @@ func _build_ui() -> void:
 	_pause_title_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel_holder.add_child(_pause_title_sprite)
 
-	# Сторінка паузи
 	_pause_page = VBoxContainer.new()
 	_pause_page.position = Vector2(74.0, 108.0)
 	_pause_page.size = Vector2(252.0, 356.0)
@@ -174,7 +173,6 @@ func _build_ui() -> void:
 	_menu_btn.pressed.connect(_on_menu_pressed)
 	_pause_page.add_child(_menu_btn)
 
-	# Сторінка налаштувань
 	_settings_page = VBoxContainer.new()
 	_settings_page.position = Vector2(68.0, 118.0)
 	_settings_page.size = Vector2(264.0, 344.0)

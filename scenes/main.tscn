@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://c6mf7mrno7syp"]
+[gd_scene load_steps=5 format=3 uid="uid://c6mf7mrno7syp"]
 
 [ext_resource type="Texture2D" uid="uid://d1xwnjbxb2tj6" path="res://assets/background.jpg" id="1_bg"]
 [ext_resource type="PackedScene" uid="uid://d3gd58em08r2x" path="res://scenes/player.tscn" id="2_sugp2"]
@@ -17,6 +17,7 @@ offset_bottom = 735.0
 mouse_filter = 2
 texture = ExtResource("1_bg")
 expand_mode = 1
+stretch_mode = 0
 
 [node name="WaveManager" type="Node" parent="." unique_id=201100403]
 script = ExtResource("3_wm")
@@ -46,6 +47,7 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
 theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 14
 text = "ЛКМ — вогонь | C — присісти в окоп | R — перезарядка | W / S — кувирок | 1 — граната | 2 — хілка"
+horizontal_alignment = 0
 
 [node name="BannerLabel" type="Label" parent="UI" unique_id=201100407]
 offset_left = 290.0
