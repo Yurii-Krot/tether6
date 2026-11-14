@@ -169,6 +169,12 @@ func _check_enemy_bullet_hit(from_pos: Vector2, to_pos: Vector2) -> bool:
 				_spawn_impact_sparks(closest, true)
 				queue_free()
 				return true
+			elif in_cover:
+				# Ворожа куля б'ється об бруствер перед окопом
+				var parapet_pos := Vector2(player.global_position.x + 18.0, closest.y)
+				_spawn_impact_sparks(parapet_pos, false)
+				queue_free()
+				return true
 
 	return false
 

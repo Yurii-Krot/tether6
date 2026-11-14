@@ -28,7 +28,7 @@ const ANIM_ROW_ROLL := 3
 @export var fire_rate := 10.0 # 0.1 с між пострілами
 @export var bullet_speed := 1380.0
 @export var magazine_size := 30
-@export var reload_time := 0.5
+@export var reload_time := 3.5
 @export var empty_hold_reload_multiplier := 0.25
 @export var trickle_penalty_duration := 0.85
 @export var max_health := 100.0
@@ -55,14 +55,12 @@ const ANIM_ROW_ROLL := 3
 var ammo := 30
 var health := 100.0
 var cooldown := 0.0
-# За замовчуванням боєць стоїть у бойовій стійці, присідає в окоп на клавішу C
-var is_in_cover := false
+# У стані спокою боєць за замовчуванням захований в окопі (не отримує урон)
+var is_in_cover := true
 var is_rolling := false
 var is_dead := false
 
-var _is_reloading := false
-var _reload_timer := 0.0
-var _reload_start_ammo := 0
+var _reload_accumulator := 0.0
 var _mag_was_empty := false
 var _trickle_reload_timer := 0.0
 var _flash_timer := 0.0
@@ -145,7 +143,7 @@ func _ready() -> void:
 	if DisplayServer.get_name() != "headless":
 		Input.set_custom_mouse_cursor(CROSSHAIR_TEXTURE, Input.CURSOR_ARROW, Vector2(16, 16))
 
-	_set_cover(false)
+	_set_cover(true)
 	_update_hud()
 
 
@@ -179,32 +177,42 @@ func _process(delta: float) -> void:
 	var mouse_pos := get_global_mouse_position()
 	cooldown = maxf(cooldown - delta, 0.0)
 
-	# Логіка укриття та перезарядки:
-	# C — присісти в окоп / встати; R — перезарядка (0.5 с); автоматичного відновлення патронів немає.
-	var anim_busy := (_grenade_throw_timer > 0.0) or (_heal_anim_timer > 0.0)
-	if not is_rolling and not anim_busy and Input.is_action_just_pressed("cover"):
-		_set_cover(not is_in_cover)
+	# Логіка укриття: у стані спокою (коли не стріляємо) боєць захований в окопі й не отримує урон.
+	# Коли затискаємо ЛКМ (shoot) і є патрони — висовується з окопу, веде гвинтівку за прицілом і стріляє.
+	var busy_action := (_grenade_throw_timer > 0.0) or (_heal_anim_timer > 0.0)
+	var force_cover := Input.is_action_pressed("cover") and not busy_action
+	var wants_to_shoot := Input.is_action_pressed("shoot") and ammo > 0 and not force_cover and not is_rolling and not busy_action
 
-	if not _is_reloading and not is_rolling and not anim_busy and ammo < magazine_size and Input.is_action_just_pressed("reload"):
-		_start_reload()
+	if wants_to_shoot or busy_action:
+		_combat_expose_timer = 0.16
+	else:
+		_combat_expose_timer = maxf(_combat_expose_timer - delta, 0.0)
 
-	if _is_reloading:
-		_process_reload(delta)
-
-	var wants_to_shoot := Input.is_action_pressed("shoot") and ammo > 0 and not is_in_cover and not is_rolling and not anim_busy and not _is_reloading
+	var should_be_in_cover := (_combat_expose_timer <= 0.0) or force_cover or (ammo <= 0 and not busy_action)
+	if not is_rolling and should_be_in_cover != is_in_cover:
+		_set_cover(should_be_in_cover)
 
 	_update_weapon_aim(delta, mouse_pos)
 
 	if not is_rolling and _heal_anim_timer <= 0.0:
 		_update_sprite_frame_animation(delta)
 
-	if wants_to_shoot and cooldown <= 0.0 and ammo > 0:
-		ammo -= 1
-		_ammo_trail_hold_timer = 0.18
-		cooldown = 1.0 / fire_rate
-		shoot(mouse_pos)
-		ammo_changed.emit(ammo, magazine_size)
-		_update_hud()
+	if is_in_cover or is_rolling:
+		_process_reload_in_cover(delta)
+	else:
+		_reload_accumulator = 0.0
+		if wants_to_shoot and cooldown <= 0.0 and ammo > 0:
+			var shooting_trickle := _mag_was_empty and ammo <= 3
+			ammo -= 1
+			if ammo <= 0:
+				_mag_was_empty = true
+			if shooting_trickle:
+				_trickle_reload_timer = trickle_penalty_duration
+			_ammo_trail_hold_timer = 0.18
+			cooldown = 1.0 / fire_rate
+			shoot(mouse_pos)
+			ammo_changed.emit(ammo, magazine_size)
+			_update_hud()
 
 
 func _update_weapon_aim(delta: float, mouse_pos: Vector2) -> void:
@@ -219,7 +227,7 @@ func _update_weapon_aim(delta: float, mouse_pos: Vector2) -> void:
 
 	if is_in_cover and _grenade_throw_timer <= 0.0 and _heal_anim_timer <= 0.0:
 		# В окопі гвинтівка опущена вниз-вперед і рухається під час перезарядки
-		var reload_angle := 0.22 + (sin(_anim_time * 14.0) * 0.14 if _is_reloading else sin(_anim_time * 3.0) * 0.03)
+		var reload_angle := 0.22 + (sin(_anim_time * 11.0) * 0.12 if ammo < magazine_size else sin(_anim_time * 3.0) * 0.03)
 		_current_aim_angle = lerp_angle(_current_aim_angle, reload_angle, minf(delta * 14.0, 1.0))
 		weapon_pivot.position = body.position + SHOULDER_OFFSET_CROUCH
 		weapon_pivot.rotation = _current_aim_angle
@@ -262,14 +270,14 @@ func _update_sprite_frame_animation(delta: float) -> void:
 		land_squash = sin((_landing_squash_timer / 0.14) * PI)
 
 	if is_in_cover:
-		# Рядок 2: боєць сидить пригнувшись глибоко в окопі (в безпеці)
-		var reload_bob := sin(_anim_time * 14.0) * 1.5 if _is_reloading else sin(_anim_time * 3.0) * 0.6
+		# Рядок 2: у стані спокою боєць сидить пригнувшись глибоко в окопі (в безпеці)
+		var reload_bob := sin(_anim_time * 11.0) * 1.5 if ammo < magazine_size else sin(_anim_time * 3.0) * 0.6
 		body.position = Vector2(-10.0, 6.0 + reload_bob + land_squash * 4.0)
 		body.scale = Vector2(
 			BASE_SPRITE_SCALE.x * (1.0 + 0.12 * land_squash),
 			BASE_SPRITE_SCALE.y * (1.0 - 0.14 * land_squash)
 		)
-		var col := int(_anim_time * 12.0) % ANIM_COLS if _is_reloading else 0
+		var col := int(_anim_time * 9.0) % ANIM_COLS if ammo < magazine_size else 0
 		body.frame_coords = Vector2i(col, ANIM_ROW_CROUCH)
 		if shadow:
 			shadow.position = Vector2(-10.0, 48.0)
@@ -463,7 +471,7 @@ func _start_grenade_throw() -> void:
 	_grenade_launched = false
 	_combat_expose_timer = _grenade_throw_duration + 0.06
 	if is_in_cover:
-		_set_cover(false)
+		_set_cover(true)
 	_update_hud()
 
 
@@ -596,7 +604,8 @@ func _finish_roll() -> void:
 	# Пил і грудки землі при приземленні після кувирка
 	_spawn_trench_dust(global_position + Vector2(0.0, 36.0), _roll_dir)
 
-	_set_cover(is_in_cover)
+	var wants_to_shoot := Input.is_action_pressed("shoot") and ammo > 0 and not Input.is_action_pressed("cover")
+	_set_cover(not wants_to_shoot)
 	roll_finished.emit()
 	_update_hud()
 
@@ -671,6 +680,9 @@ func _set_cover(active: bool) -> void:
 		body.frame_coords = Vector2i(0, ANIM_ROW_CROUCH)
 		muzzle_flash.visible = false
 		tracer_line.visible = false
+		if ammo < magazine_size:
+			reload_sound.pitch_scale = 0.95
+			reload_sound.play()
 	else:
 		if _damage_tint_timer <= 0.0:
 			body.modulate = Color.WHITE
@@ -684,27 +696,31 @@ func _set_cover(active: bool) -> void:
 	_update_hud()
 
 
-func _start_reload() -> void:
-	if _is_reloading or ammo >= magazine_size:
-		return
-	_is_reloading = true
-	_reload_timer = maxf(reload_time, 0.05)
-	_reload_start_ammo = ammo
-	reload_sound.pitch_scale = 0.95
-	reload_sound.play()
-	_update_hud()
+func _is_slow_reloading() -> bool:
+	var trying_to_shoot := Input.is_action_pressed("shoot") and not Input.is_action_pressed("cover")
+	return _mag_was_empty and (trying_to_shoot or _trickle_reload_timer > 0.0)
 
 
-func _process_reload(delta: float) -> void:
-	if not _is_reloading:
+func _process_reload_in_cover(delta: float) -> void:
+	if ammo >= magazine_size:
+		_mag_was_empty = false
 		return
-	_reload_timer = maxf(_reload_timer - delta, 0.0)
-	if _reload_timer <= 0.0:
-		_is_reloading = false
-		ammo = magazine_size
+
+	var bullets_per_sec := float(magazine_size) / maxf(reload_time, 0.05)
+	if _is_slow_reloading():
+		bullets_per_sec *= clampf(empty_hold_reload_multiplier, 0.05, 1.0)
+	_reload_accumulator += delta * bullets_per_sec
+	var added := int(_reload_accumulator)
+	if added > 0:
+		_reload_accumulator -= float(added)
+		ammo = mini(ammo + added, magazine_size)
+		if ammo >= 4 or ammo == magazine_size:
+			_mag_was_empty = false
 		ammo_changed.emit(ammo, magazine_size)
-		reload_sound.pitch_scale = 1.12
-		reload_sound.play()
+		if ammo == magazine_size:
+			_reload_accumulator = 0.0
+			reload_sound.pitch_scale = 1.12
+			reload_sound.play()
 		_update_hud()
 
 
@@ -1005,11 +1021,12 @@ func _update_hud_bars(delta: float) -> void:
 	else:
 		_hp_trail_ratio = hp_ratio
 
-	var is_reloading_now := _is_reloading and not is_dead
-	var exact_ammo := float(ammo)
-	if is_reloading_now:
-		var reload_progress := 1.0 - (_reload_timer / maxf(reload_time, 0.05))
-		exact_ammo = lerpf(float(_reload_start_ammo), float(magazine_size), clampf(reload_progress, 0.0, 1.0))
+	var is_reloading_now := (is_in_cover or is_rolling) and not is_dead and ammo < magazine_size
+	var exact_ammo := clampf(
+		float(ammo) + (_reload_accumulator if is_reloading_now else 0.0),
+		0.0,
+		float(magazine_size)
+	)
 	var ammo_ratio := clampf(exact_ammo / float(maxi(magazine_size, 1)), 0.0, 1.0)
 
 	if ammo_ratio < _ammo_trail_ratio:
@@ -1027,11 +1044,15 @@ func _update_hud_bars(delta: float) -> void:
 	if _hp_bar_label:
 		_hp_bar_label.text = "ХП: %d / %d" % [int(ceilf(health)), int(roundf(max_health))]
 
+	var is_slow_reload := is_reloading_now and _is_slow_reloading()
 	if _ammo_bar_main:
 		_ammo_bar_main.size.x = BAR_MAX_WIDTH * ammo_ratio
 		if is_reloading_now:
 			var pulse := 0.5 + 0.5 * sin(_anim_time * 10.0)
-			_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0).lerp(Color(0.28, 0.72, 1.0, 1.0), pulse * 0.6)
+			if is_slow_reload:
+				_ammo_bar_main.color = Color(0.90, 0.45, 0.14, 1.0).lerp(Color(1.0, 0.68, 0.24, 1.0), pulse * 0.55)
+			else:
+				_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0).lerp(Color(0.28, 0.72, 1.0, 1.0), pulse * 0.6)
 		else:
 			_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0)
 	if _ammo_bar_trail:
@@ -1040,10 +1061,10 @@ func _update_hud_bars(delta: float) -> void:
 		_ammo_bar_edge.visible = is_reloading_now and ammo_ratio > 0.01 and ammo_ratio < 0.995
 		_ammo_bar_edge.position.x = 2.0 + maxf(BAR_MAX_WIDTH * ammo_ratio - 3.0, 0.0)
 	if _ammo_bar_label:
-		if is_reloading_now:
-			_ammo_bar_label.text = "ПЕРЕЗАРЯДКА..."
-		elif ammo <= 0:
-			_ammo_bar_label.text = "ПАТРОНИ: 0 / %d  [R]" % magazine_size
+		if is_slow_reload:
+			_ammo_bar_label.text = "ПАТРОНИ: %d / %d  (повільне відновлення...)" % [ammo, magazine_size]
+		elif is_reloading_now:
+			_ammo_bar_label.text = "ПАТРОНИ: %d / %d  (відновлення...)" % [ammo, magazine_size]
 		else:
 			_ammo_bar_label.text = "ПАТРОНИ: %d / %d" % [ammo, magazine_size]
 
@@ -1090,16 +1111,9 @@ func _ensure_input_actions() -> void:
 			InputMap.action_add_event("use_heal", ev)
 	if not InputMap.has_action("cover"):
 		InputMap.add_action("cover")
-	InputMap.action_erase_events("cover")
-	var cover_ev := InputEventKey.new()
-	cover_ev.physical_keycode = KEY_C
-	InputMap.action_add_event("cover", cover_ev)
-
-	if not InputMap.has_action("reload"):
-		InputMap.add_action("reload")
-		var reload_ev := InputEventKey.new()
-		reload_ev.physical_keycode = KEY_R
-		InputMap.action_add_event("reload", reload_ev)
+		var ev := InputEventKey.new()
+		ev.physical_keycode = KEY_SPACE
+		InputMap.action_add_event("cover", ev)
 
 	if not InputMap.has_action("roll_up"):
 		InputMap.add_action("roll_up")
