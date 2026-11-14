@@ -8,6 +8,7 @@ const BASE_UPGRADE_COST := 50
 static var current_level: int = 1
 static var coins: int = 0
 static var last_level_earned: int = 0
+static var master_volume: float = 0.8
 
 # Рівні прокачки (від 0 до MAX_UPGRADE_LEVEL = 5)
 static var upg_hp_level: int = 0
@@ -140,3 +141,19 @@ static func reset_campaign() -> void:
 	upg_hp_level = 0
 	upg_damage_level = 0
 	upg_coins_level = 0
+
+
+static func set_master_volume(value: float) -> void:
+	master_volume = clampf(value, 0.0, 1.0)
+	apply_audio_settings()
+
+
+static func apply_audio_settings() -> void:
+	var bus_idx := AudioServer.get_bus_index("Master")
+	if bus_idx == -1:
+		return
+	if master_volume <= 0.001:
+		AudioServer.set_bus_mute(bus_idx, true)
+	else:
+		AudioServer.set_bus_mute(bus_idx, false)
+		AudioServer.set_bus_volume_db(bus_idx, linear_to_db(master_volume))

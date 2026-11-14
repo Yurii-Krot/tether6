@@ -1,6 +1,7 @@
 extends Node2D
 
 const GAME_STATE := preload("res://scripts/game_state.gd")
+const PAUSE_MENU_SCRIPT := preload("res://scripts/pause_menu.gd")
 const BATTLE_BGM_STREAM := preload("res://assets/battle_bgm.mp3")
 const BOSS_BGM_STREAM := preload("res://assets/boss_bgm.mp3")
 const UPGRADE_SCENE_PATH := "res://scenes/upgrade_menu.tscn"
@@ -14,6 +15,8 @@ var _campaign_won := false
 var _elapsed_time := 0.0
 var _level_earned := 0
 var _bgm_player: AudioStreamPlayer = null
+var _pause_menu: PauseMenu = null
+var _pause_hud_btn: Button = null
 
 # Смужка прогресу рівня з повзунком справа зверху
 var _progress_panel: ColorRect = null
@@ -31,8 +34,11 @@ var _displayed_progress := 0.0
 
 func _ready() -> void:
 	_level_earned = 0
+	GAME_STATE.apply_audio_settings()
 	_start_battle_bgm()
 	_create_top_right_progress_bar()
+	_create_pause_hud_button()
+	_setup_pause_menu()
 	_update_hud()
 
 	wave_manager.wave_started.connect(_on_wave_started)
@@ -338,15 +344,67 @@ func _on_bgm_finished() -> void:
 
 
 func _exit_tree() -> void:
+	if is_inside_tree() and get_tree():
+		get_tree().paused = false
 	if _bgm_player != null and is_instance_valid(_bgm_player):
 		_bgm_player.stop()
 		_bgm_player.stream = null
+
+
+func _setup_pause_menu() -> void:
+	_pause_menu = PAUSE_MENU_SCRIPT.new()
+	add_child(_pause_menu)
+	_pause_menu.restart_requested.connect(_on_pause_restart_requested)
+	_pause_menu.menu_requested.connect(_on_pause_menu_requested)
+
+
+func _create_pause_hud_button() -> void:
+	_pause_hud_btn = Button.new()
+	_pause_hud_btn.position = Vector2(1166.0, 70.0)
+	_pause_hud_btn.size = Vector2(96.0, 30.0)
+	_pause_hud_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_pause_hud_btn.focus_mode = Control.FOCUS_NONE
+	_pause_hud_btn.text = "|| ПАУЗА"
+	_pause_hud_btn.add_theme_font_size_override("font_size", 13)
+	_pause_hud_btn.add_theme_color_override("font_color", Color(0.92, 0.88, 0.76, 1.0))
+
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.10, 0.11, 0.13, 0.90)
+	sb.border_color = Color(0.62, 0.53, 0.34, 0.95)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(6)
+
+	var sb_hover := sb.duplicate()
+	sb_hover.bg_color = Color(0.18, 0.18, 0.20, 0.96)
+	sb_hover.border_color = Color(0.84, 0.74, 0.48, 1.0)
+
+	_pause_hud_btn.add_theme_stylebox_override("normal", sb)
+	_pause_hud_btn.add_theme_stylebox_override("hover", sb_hover)
+	_pause_hud_btn.add_theme_stylebox_override("pressed", sb)
+	_pause_hud_btn.pressed.connect(func() -> void:
+		if _pause_menu and not _game_over and not _transitioning:
+			_pause_menu.open_pause()
+	)
+	$UI.add_child(_pause_hud_btn)
+
+
+func _on_pause_restart_requested() -> void:
+	_fade_to_scene("res://scenes/main.tscn")
+
+
+func _on_pause_menu_requested() -> void:
+	_fade_to_scene(MAIN_MENU_SCENE_PATH)
 
 
 func _fade_to_scene(scene_path: String) -> void:
 	if _transitioning or not is_inside_tree():
 		return
 	_transitioning = true
+	if _pause_menu:
+		_pause_menu.set_can_toggle_pause(false)
+	if _pause_hud_btn:
+		_pause_hud_btn.visible = false
+	get_tree().paused = false
 	var fade_out := ColorRect.new()
 	fade_out.color = Color(0.0, 0.0, 0.0, 0.0)
 	fade_out.size = Vector2(1600.0, 900.0)

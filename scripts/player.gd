@@ -8,6 +8,8 @@ signal roll_started(direction: float)
 signal roll_finished
 
 const CROSSHAIR_TEXTURE := preload("res://assets/crosshair.png")
+const ICON_GRENADE := preload("res://assets/icon_grenade.png")
+const ICON_MEDKIT := preload("res://assets/icon_medkit.png")
 const GRENADE_SCRIPT := preload("res://scripts/grenade.gd")
 const GAME_STATE := preload("res://scripts/game_state.gd")
 const BASE_SPRITE_SCALE := Vector2(0.64, 0.64)
@@ -26,7 +28,7 @@ const ANIM_ROW_ROLL := 3
 @export var fire_rate := 10.0 # 0.1 с між пострілами
 @export var bullet_speed := 1380.0
 @export var magazine_size := 30
-@export var reload_time := 3.5
+@export var reload_time := 0.5
 @export var empty_hold_reload_multiplier := 0.25
 @export var trickle_penalty_duration := 0.85
 @export var max_health := 100.0
@@ -53,12 +55,14 @@ const ANIM_ROW_ROLL := 3
 var ammo := 30
 var health := 100.0
 var cooldown := 0.0
-# У стані спокою боєць за замовчуванням захований в окопі (не отримує урон)
-var is_in_cover := true
+# За замовчуванням боєць стоїть у бойовій стійці, присідає в окоп на клавішу C
+var is_in_cover := false
 var is_rolling := false
 var is_dead := false
 
-var _reload_accumulator := 0.0
+var _is_reloading := false
+var _reload_timer := 0.0
+var _reload_start_ammo := 0
 var _mag_was_empty := false
 var _trickle_reload_timer := 0.0
 var _flash_timer := 0.0
@@ -97,7 +101,10 @@ var _ammo_bar_trail: ColorRect = null
 var _ammo_bar_main: ColorRect = null
 var _ammo_bar_edge: ColorRect = null
 var _ammo_bar_label: Label = null
-var _bottom_status_label: Label = null
+var _grenade_icon_rect: TextureRect = null
+var _grenade_hud_label: Label = null
+var _medkit_icon_rect: TextureRect = null
+var _medkit_hud_label: Label = null
 var _hp_trail_ratio := 1.0
 var _hp_trail_hold_timer := 0.0
 var _ammo_trail_ratio := 1.0
@@ -138,7 +145,7 @@ func _ready() -> void:
 	if DisplayServer.get_name() != "headless":
 		Input.set_custom_mouse_cursor(CROSSHAIR_TEXTURE, Input.CURSOR_ARROW, Vector2(16, 16))
 
-	_set_cover(true)
+	_set_cover(false)
 	_update_hud()
 
 
@@ -172,42 +179,32 @@ func _process(delta: float) -> void:
 	var mouse_pos := get_global_mouse_position()
 	cooldown = maxf(cooldown - delta, 0.0)
 
-	# Логіка укриття: у стані спокою (коли не стріляємо) боєць захований в окопі й не отримує урон.
-	# Коли затискаємо ЛКМ (shoot) і є патрони — висовується з окопу, веде гвинтівку за прицілом і стріляє.
-	var busy_action := (_grenade_throw_timer > 0.0) or (_heal_anim_timer > 0.0)
-	var force_cover := Input.is_action_pressed("cover") and not busy_action
-	var wants_to_shoot := Input.is_action_pressed("shoot") and ammo > 0 and not force_cover and not is_rolling and not busy_action
+	# Логіка укриття та перезарядки:
+	# C — присісти в окоп / встати; R — перезарядка (0.5 с); автоматичного відновлення патронів немає.
+	var anim_busy := (_grenade_throw_timer > 0.0) or (_heal_anim_timer > 0.0)
+	if not is_rolling and not anim_busy and Input.is_action_just_pressed("cover"):
+		_set_cover(not is_in_cover)
 
-	if wants_to_shoot or busy_action:
-		_combat_expose_timer = 0.16
-	else:
-		_combat_expose_timer = maxf(_combat_expose_timer - delta, 0.0)
+	if not _is_reloading and not is_rolling and not anim_busy and ammo < magazine_size and Input.is_action_just_pressed("reload"):
+		_start_reload()
 
-	var should_be_in_cover := (_combat_expose_timer <= 0.0) or force_cover or (ammo <= 0 and not busy_action)
-	if not is_rolling and should_be_in_cover != is_in_cover:
-		_set_cover(should_be_in_cover)
+	if _is_reloading:
+		_process_reload(delta)
+
+	var wants_to_shoot := Input.is_action_pressed("shoot") and ammo > 0 and not is_in_cover and not is_rolling and not anim_busy and not _is_reloading
 
 	_update_weapon_aim(delta, mouse_pos)
 
 	if not is_rolling and _heal_anim_timer <= 0.0:
 		_update_sprite_frame_animation(delta)
 
-	if is_in_cover or is_rolling:
-		_process_reload_in_cover(delta)
-	else:
-		_reload_accumulator = 0.0
-		if wants_to_shoot and cooldown <= 0.0 and ammo > 0:
-			var shooting_trickle := _mag_was_empty and ammo <= 3
-			ammo -= 1
-			if ammo <= 0:
-				_mag_was_empty = true
-			if shooting_trickle:
-				_trickle_reload_timer = trickle_penalty_duration
-			_ammo_trail_hold_timer = 0.18
-			cooldown = 1.0 / fire_rate
-			shoot(mouse_pos)
-			ammo_changed.emit(ammo, magazine_size)
-			_update_hud()
+	if wants_to_shoot and cooldown <= 0.0 and ammo > 0:
+		ammo -= 1
+		_ammo_trail_hold_timer = 0.18
+		cooldown = 1.0 / fire_rate
+		shoot(mouse_pos)
+		ammo_changed.emit(ammo, magazine_size)
+		_update_hud()
 
 
 func _update_weapon_aim(delta: float, mouse_pos: Vector2) -> void:
@@ -222,7 +219,7 @@ func _update_weapon_aim(delta: float, mouse_pos: Vector2) -> void:
 
 	if is_in_cover and _grenade_throw_timer <= 0.0 and _heal_anim_timer <= 0.0:
 		# В окопі гвинтівка опущена вниз-вперед і рухається під час перезарядки
-		var reload_angle := 0.22 + (sin(_anim_time * 11.0) * 0.12 if ammo < magazine_size else sin(_anim_time * 3.0) * 0.03)
+		var reload_angle := 0.22 + (sin(_anim_time * 14.0) * 0.14 if _is_reloading else sin(_anim_time * 3.0) * 0.03)
 		_current_aim_angle = lerp_angle(_current_aim_angle, reload_angle, minf(delta * 14.0, 1.0))
 		weapon_pivot.position = body.position + SHOULDER_OFFSET_CROUCH
 		weapon_pivot.rotation = _current_aim_angle
@@ -265,14 +262,14 @@ func _update_sprite_frame_animation(delta: float) -> void:
 		land_squash = sin((_landing_squash_timer / 0.14) * PI)
 
 	if is_in_cover:
-		# Рядок 2: у стані спокою боєць сидить пригнувшись глибоко в окопі (в безпеці)
-		var reload_bob := sin(_anim_time * 11.0) * 1.5 if ammo < magazine_size else sin(_anim_time * 3.0) * 0.6
+		# Рядок 2: боєць сидить пригнувшись глибоко в окопі (в безпеці)
+		var reload_bob := sin(_anim_time * 14.0) * 1.5 if _is_reloading else sin(_anim_time * 3.0) * 0.6
 		body.position = Vector2(-10.0, 6.0 + reload_bob + land_squash * 4.0)
 		body.scale = Vector2(
 			BASE_SPRITE_SCALE.x * (1.0 + 0.12 * land_squash),
 			BASE_SPRITE_SCALE.y * (1.0 - 0.14 * land_squash)
 		)
-		var col := int(_anim_time * 9.0) % ANIM_COLS if ammo < magazine_size else 0
+		var col := int(_anim_time * 12.0) % ANIM_COLS if _is_reloading else 0
 		body.frame_coords = Vector2i(col, ANIM_ROW_CROUCH)
 		if shadow:
 			shadow.position = Vector2(-10.0, 48.0)
@@ -599,8 +596,7 @@ func _finish_roll() -> void:
 	# Пил і грудки землі при приземленні після кувирка
 	_spawn_trench_dust(global_position + Vector2(0.0, 36.0), _roll_dir)
 
-	var wants_to_shoot := Input.is_action_pressed("shoot") and ammo > 0 and not Input.is_action_pressed("cover")
-	_set_cover(not wants_to_shoot)
+	_set_cover(is_in_cover)
 	roll_finished.emit()
 	_update_hud()
 
@@ -675,9 +671,6 @@ func _set_cover(active: bool) -> void:
 		body.frame_coords = Vector2i(0, ANIM_ROW_CROUCH)
 		muzzle_flash.visible = false
 		tracer_line.visible = false
-		if ammo < magazine_size:
-			reload_sound.pitch_scale = 0.95
-			reload_sound.play()
 	else:
 		if _damage_tint_timer <= 0.0:
 			body.modulate = Color.WHITE
@@ -691,31 +684,27 @@ func _set_cover(active: bool) -> void:
 	_update_hud()
 
 
-func _is_slow_reloading() -> bool:
-	var trying_to_shoot := Input.is_action_pressed("shoot") and not Input.is_action_pressed("cover")
-	return _mag_was_empty and (trying_to_shoot or _trickle_reload_timer > 0.0)
-
-
-func _process_reload_in_cover(delta: float) -> void:
-	if ammo >= magazine_size:
-		_mag_was_empty = false
+func _start_reload() -> void:
+	if _is_reloading or ammo >= magazine_size:
 		return
+	_is_reloading = true
+	_reload_timer = maxf(reload_time, 0.05)
+	_reload_start_ammo = ammo
+	reload_sound.pitch_scale = 0.95
+	reload_sound.play()
+	_update_hud()
 
-	var bullets_per_sec := float(magazine_size) / maxf(reload_time, 0.05)
-	if _is_slow_reloading():
-		bullets_per_sec *= clampf(empty_hold_reload_multiplier, 0.05, 1.0)
-	_reload_accumulator += delta * bullets_per_sec
-	var added := int(_reload_accumulator)
-	if added > 0:
-		_reload_accumulator -= float(added)
-		ammo = mini(ammo + added, magazine_size)
-		if ammo >= 4 or ammo == magazine_size:
-			_mag_was_empty = false
+
+func _process_reload(delta: float) -> void:
+	if not _is_reloading:
+		return
+	_reload_timer = maxf(_reload_timer - delta, 0.0)
+	if _reload_timer <= 0.0:
+		_is_reloading = false
+		ammo = magazine_size
 		ammo_changed.emit(ammo, magazine_size)
-		if ammo == magazine_size:
-			_reload_accumulator = 0.0
-			reload_sound.pitch_scale = 1.12
-			reload_sound.play()
+		reload_sound.pitch_scale = 1.12
+		reload_sound.play()
 		_update_hud()
 
 
@@ -862,8 +851,8 @@ func _create_bottom_left_bars() -> void:
 
 	# Підкладка внизу зліва екрана (1280x720)
 	var panel := ColorRect.new()
-	panel.position = Vector2(18.0, 600.0)
-	panel.size = Vector2(304.0, 104.0)
+	panel.position = Vector2(18.0, 592.0)
+	panel.size = Vector2(304.0, 112.0)
 	panel.color = Color(0.06, 0.07, 0.08, 0.78)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(panel)
@@ -875,19 +864,48 @@ func _create_bottom_left_bars() -> void:
 	border_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(border_top)
 
-	# Верхній рядок підпису гранати та хілки
-	_bottom_status_label = Label.new()
-	_bottom_status_label.position = Vector2(10.0, 6.0)
-	_bottom_status_label.size = Vector2(288.0, 22.0)
-	_bottom_status_label.add_theme_font_size_override("font_size", 13)
-	_bottom_status_label.add_theme_color_override("font_color", Color(0.94, 0.90, 0.78, 1.0))
-	_bottom_status_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
-	_bottom_status_label.add_theme_constant_override("outline_size", 4)
-	panel.add_child(_bottom_status_label)
+	# Верхній рядок з іконками гранати та хілки
+	_grenade_icon_rect = TextureRect.new()
+	_grenade_icon_rect.position = Vector2(12.0, 6.0)
+	_grenade_icon_rect.size = Vector2(26.0, 26.0)
+	_grenade_icon_rect.texture = ICON_GRENADE
+	_grenade_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_grenade_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_grenade_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(_grenade_icon_rect)
+
+	_grenade_hud_label = Label.new()
+	_grenade_hud_label.position = Vector2(42.0, 7.0)
+	_grenade_hud_label.size = Vector2(102.0, 24.0)
+	_grenade_hud_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_grenade_hud_label.add_theme_font_size_override("font_size", 14)
+	_grenade_hud_label.add_theme_color_override("font_color", Color(0.94, 0.90, 0.78, 1.0))
+	_grenade_hud_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
+	_grenade_hud_label.add_theme_constant_override("outline_size", 4)
+	panel.add_child(_grenade_hud_label)
+
+	_medkit_icon_rect = TextureRect.new()
+	_medkit_icon_rect.position = Vector2(150.0, 6.0)
+	_medkit_icon_rect.size = Vector2(26.0, 26.0)
+	_medkit_icon_rect.texture = ICON_MEDKIT
+	_medkit_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_medkit_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_medkit_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(_medkit_icon_rect)
+
+	_medkit_hud_label = Label.new()
+	_medkit_hud_label.position = Vector2(180.0, 7.0)
+	_medkit_hud_label.size = Vector2(114.0, 24.0)
+	_medkit_hud_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_medkit_hud_label.add_theme_font_size_override("font_size", 14)
+	_medkit_hud_label.add_theme_color_override("font_color", Color(0.94, 0.90, 0.78, 1.0))
+	_medkit_hud_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
+	_medkit_hud_label.add_theme_constant_override("outline_size", 4)
+	panel.add_child(_medkit_hud_label)
 
 	# 1) ЧЕРВОНИЙ БАР ХП (HP)
 	var hp_frame := ColorRect.new()
-	hp_frame.position = Vector2(10.0, 32.0)
+	hp_frame.position = Vector2(10.0, 38.0)
 	hp_frame.size = Vector2(BAR_MAX_WIDTH + 4.0, BAR_HEIGHT + 4.0)
 	hp_frame.color = Color(0.02, 0.02, 0.03, 0.96)
 	hp_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -928,7 +946,7 @@ func _create_bottom_left_bars() -> void:
 
 	# 2) СИНІЙ БАР ПАТРОНІВ (AMMO)
 	var ammo_frame := ColorRect.new()
-	ammo_frame.position = Vector2(10.0, 66.0)
+	ammo_frame.position = Vector2(10.0, 72.0)
 	ammo_frame.size = Vector2(BAR_MAX_WIDTH + 4.0, BAR_HEIGHT + 4.0)
 	ammo_frame.color = Color(0.02, 0.02, 0.03, 0.96)
 	ammo_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -987,12 +1005,11 @@ func _update_hud_bars(delta: float) -> void:
 	else:
 		_hp_trail_ratio = hp_ratio
 
-	var is_reloading_now := (is_in_cover or is_rolling) and not is_dead and ammo < magazine_size
-	var exact_ammo := clampf(
-		float(ammo) + (_reload_accumulator if is_reloading_now else 0.0),
-		0.0,
-		float(magazine_size)
-	)
+	var is_reloading_now := _is_reloading and not is_dead
+	var exact_ammo := float(ammo)
+	if is_reloading_now:
+		var reload_progress := 1.0 - (_reload_timer / maxf(reload_time, 0.05))
+		exact_ammo = lerpf(float(_reload_start_ammo), float(magazine_size), clampf(reload_progress, 0.0, 1.0))
 	var ammo_ratio := clampf(exact_ammo / float(maxi(magazine_size, 1)), 0.0, 1.0)
 
 	if ammo_ratio < _ammo_trail_ratio:
@@ -1010,15 +1027,11 @@ func _update_hud_bars(delta: float) -> void:
 	if _hp_bar_label:
 		_hp_bar_label.text = "ХП: %d / %d" % [int(ceilf(health)), int(roundf(max_health))]
 
-	var is_slow_reload := is_reloading_now and _is_slow_reloading()
 	if _ammo_bar_main:
 		_ammo_bar_main.size.x = BAR_MAX_WIDTH * ammo_ratio
 		if is_reloading_now:
 			var pulse := 0.5 + 0.5 * sin(_anim_time * 10.0)
-			if is_slow_reload:
-				_ammo_bar_main.color = Color(0.90, 0.45, 0.14, 1.0).lerp(Color(1.0, 0.68, 0.24, 1.0), pulse * 0.55)
-			else:
-				_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0).lerp(Color(0.28, 0.72, 1.0, 1.0), pulse * 0.6)
+			_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0).lerp(Color(0.28, 0.72, 1.0, 1.0), pulse * 0.6)
 		else:
 			_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0)
 	if _ammo_bar_trail:
@@ -1027,17 +1040,32 @@ func _update_hud_bars(delta: float) -> void:
 		_ammo_bar_edge.visible = is_reloading_now and ammo_ratio > 0.01 and ammo_ratio < 0.995
 		_ammo_bar_edge.position.x = 2.0 + maxf(BAR_MAX_WIDTH * ammo_ratio - 3.0, 0.0)
 	if _ammo_bar_label:
-		if is_slow_reload:
-			_ammo_bar_label.text = "ПАТРОНИ: %d / %d  (повільне відновлення...)" % [ammo, magazine_size]
-		elif is_reloading_now:
-			_ammo_bar_label.text = "ПАТРОНИ: %d / %d  (відновлення...)" % [ammo, magazine_size]
+		if is_reloading_now:
+			_ammo_bar_label.text = "ПЕРЕЗАРЯДКА..."
+		elif ammo <= 0:
+			_ammo_bar_label.text = "ПАТРОНИ: 0 / %d  [R]" % magazine_size
 		else:
 			_ammo_bar_label.text = "ПАТРОНИ: %d / %d" % [ammo, magazine_size]
 
-	if _bottom_status_label:
-		var gren_str := "Граната [1]: ГОТОВА" if _grenade_cooldown_timer <= 0.0 else ("Граната [1]: %dс" % int(ceilf(_grenade_cooldown_timer)))
-		var heal_str := "Хілка [2]: ГОТОВА" if _heal_cooldown_timer <= 0.0 else ("Хілка [2]: %dс" % int(ceilf(_heal_cooldown_timer)))
-		_bottom_status_label.text = "%s | %s" % [gren_str, heal_str]
+	if _grenade_hud_label:
+		if _grenade_cooldown_timer <= 0.0:
+			_grenade_hud_label.text = "ГОТОВА [1]"
+			_grenade_hud_label.add_theme_color_override("font_color", Color(0.75, 0.98, 0.72, 1.0))
+		else:
+			_grenade_hud_label.text = "%dс  [1]" % int(ceilf(_grenade_cooldown_timer))
+			_grenade_hud_label.add_theme_color_override("font_color", Color(0.78, 0.76, 0.70, 0.9))
+	if _grenade_icon_rect:
+		_grenade_icon_rect.modulate = Color.WHITE if _grenade_cooldown_timer <= 0.0 else Color(0.55, 0.55, 0.55, 0.75)
+
+	if _medkit_hud_label:
+		if _heal_cooldown_timer <= 0.0:
+			_medkit_hud_label.text = "ГОТОВА [2]"
+			_medkit_hud_label.add_theme_color_override("font_color", Color(0.75, 0.98, 0.72, 1.0))
+		else:
+			_medkit_hud_label.text = "%dс  [2]" % int(ceilf(_heal_cooldown_timer))
+			_medkit_hud_label.add_theme_color_override("font_color", Color(0.78, 0.76, 0.70, 0.9))
+	if _medkit_icon_rect:
+		_medkit_icon_rect.modulate = Color.WHITE if _heal_cooldown_timer <= 0.0 else Color(0.55, 0.55, 0.55, 0.75)
 
 
 func _update_hud() -> void:
@@ -1062,9 +1090,16 @@ func _ensure_input_actions() -> void:
 			InputMap.action_add_event("use_heal", ev)
 	if not InputMap.has_action("cover"):
 		InputMap.add_action("cover")
-		var ev := InputEventKey.new()
-		ev.physical_keycode = KEY_SPACE
-		InputMap.action_add_event("cover", ev)
+	InputMap.action_erase_events("cover")
+	var cover_ev := InputEventKey.new()
+	cover_ev.physical_keycode = KEY_C
+	InputMap.action_add_event("cover", cover_ev)
+
+	if not InputMap.has_action("reload"):
+		InputMap.add_action("reload")
+		var reload_ev := InputEventKey.new()
+		reload_ev.physical_keycode = KEY_R
+		InputMap.action_add_event("reload", reload_ev)
 
 	if not InputMap.has_action("roll_up"):
 		InputMap.add_action("roll_up")
