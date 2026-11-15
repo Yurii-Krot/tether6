@@ -12,17 +12,48 @@ const ICON_GRENADE := preload("res://assets/icon_grenade.png")
 const ICON_MEDKIT := preload("res://assets/icon_medkit.png")
 const GRENADE_SCRIPT := preload("res://scripts/grenade.gd")
 const GAME_STATE := preload("res://scripts/game_state.gd")
+const DEATH_SHEET_TEX := preload("res://assets/player_death_sheet.png")
+const DEATH_THUD_SOUND := preload("res://assets/grenade_explosion.wav")
 const BASE_SPRITE_SCALE := Vector2(0.64, 0.64)
 const SHOULDER_OFFSET_STAND := Vector2(-11.5, -7.5)
 const SHOULDER_OFFSET_CROUCH := Vector2(-15.0, 8.5)
 const EJECT_LOCAL_POS := Vector2(37.0, -6.5)
 
-# Рядки у спрайт-листі тіла res://assets/player_spritesheet.png (6x4 кадри)
+# Рядки у спрайт-листі тіла res://assets/player_spritesheet.png (6x8 кадрів) та окремому листі смерті (6x4)
 const ANIM_COLS := 6
 const ANIM_ROW_IDLE := 0
 const ANIM_ROW_SHOOT := 1
 const ANIM_ROW_CROUCH := 2
 const ANIM_ROW_ROLL := 3
+const DEATH_TOTAL_FRAMES := 24
+
+# Нерівномірний графік кадрів смерті з різким опусканням пушки та гравітаційним прискоренням при падінні
+const DEATH_FRAME_TIMES: Array[float] = [
+	0.000, # 0: Фатальний удар
+	0.024, # 1: Руки слабшають, пушка починає різко опускатися під власною вагою
+	0.048, # 2: Ствол іде вниз, голова й плечі хиляться вперед
+	0.075, # 3: Пушка різко опущена вниз (+30°), корпус зігнутий під вагою
+	0.150, # 4: Коротка фіксація важко опущеної пушки (як на гіфці)
+	0.200, # 5: Коліна підгинаються глибше
+	0.245, # 6: Важкий ранець перетягує корпус назад
+	0.290, # 7: Передня нога відривається від землі
+	0.330, # 8: Передня нога високо піднята в коліні, втрата рівноваги назад
+	0.368, # 9: Перехід через точку рівноваги
+	0.402, # 10: Опорна нога підломлюється
+	0.430, # 11: РІЗКЕ ПАДІННЯ ПІД ГРАВІТАЦІЄЮ (прискорення вниз!)
+	0.453, # 12: Стрімке падіння спиною донизу, пушка падає вниз на ноги
+	0.473, # 13: Максимальна швидкість падіння перед землею
+	0.490, # 14: ВАЖКИЙ УДАР РАНЦЕМ ОБ ЗЕМЛЮ! (тряска екрана + пил + гуп)
+	0.525, # 15: Пружний відскок тіла і пушки від важкого удару об ґрунт
+	0.560, # 16: Верхня точка невеликого відскоку
+	0.595, # 17: Повторне приземлення на ранець
+	0.640, # 18: Затухання вібрації
+	0.690, # 19: Важке просідання голови й пушки
+	0.745, # 20: Фіксація на землі
+	0.800, # 21: Фінальна поза
+	0.855, # 22: Фінальна поза
+	0.910, # 23: Фінальна поза
+]
 
 @export var damage := 10.0
 @export var fire_rate := 10.0 # 0.1 с між пострілами
@@ -87,6 +118,8 @@ var _grenade_launched := false
 var _heal_cooldown_timer := 0.0
 var _heal_anim_timer := 0.0
 var _heal_applied := false
+var _death_anim_elapsed := 0.0
+var _death_dust_spawned := false
 
 # Візуальні бари ХП (червоний) та Патронів (синій) у лівому нижньому куті екрана
 const BAR_MAX_WIDTH := 280.0
@@ -153,6 +186,7 @@ func _process(delta: float) -> void:
 	_update_hud_bars(delta)
 
 	if is_dead:
+		_process_death_anim(delta)
 		return
 
 	_roll_cooldown_timer = maxf(_roll_cooldown_timer - delta, 0.0)
@@ -842,17 +876,118 @@ func _flash_damage() -> void:
 
 func _die() -> void:
 	is_dead = true
+	is_rolling = false
+	_death_anim_elapsed = 0.0
+	_death_dust_spawned = false
+	_damage_tint_timer = 0.0
 	weapon_pivot.visible = false
 	muzzle_flash.visible = false
 	tracer_line.visible = false
-	body.frame_coords = Vector2i(0, ANIM_ROW_CROUCH)
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(body, "rotation", -1.45, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-	tween.tween_property(body, "position", Vector2(-18.0, 26.0), 0.28)
-	tween.tween_property(body, "modulate", Color(0.45, 0.2, 0.2, 0.88), 0.28)
+	body.texture = DEATH_SHEET_TEX
+	body.hframes = ANIM_COLS
+	body.vframes = 4
+	body.rotation = 0.0
+	body.scale = BASE_SPRITE_SCALE
+	body.position = Vector2.ZERO
+	body.modulate = Color(1.75, 0.62, 0.62, 1.0)
+	body.frame_coords = Vector2i(0, 0)
 	_update_hud()
 	died.emit()
+
+
+func _process_death_anim(delta: float) -> void:
+	_death_anim_elapsed += delta
+
+	var step := 0
+	for i in range(DEATH_TOTAL_FRAMES - 1, -1, -1):
+		if _death_anim_elapsed >= DEATH_FRAME_TIMES[i]:
+			step = i
+			break
+
+	var row := int(step / ANIM_COLS)
+	var col := step % ANIM_COLS
+	body.frame_coords = Vector2i(col, row)
+	body.rotation = 0.0
+
+	# Фізика падіння під силою тяжіння: різке прискорення вниз (t^2) + ударний сквош і відскок від землі
+	if _death_anim_elapsed < 0.402:
+		var pre_t := clampf(_death_anim_elapsed / 0.402, 0.0, 1.0)
+		body.position = Vector2(0.0, lerpf(0.0, 2.0, pre_t))
+		body.scale = BASE_SPRITE_SCALE
+	elif _death_anim_elapsed < 0.490:
+		var fall_t := clampf((_death_anim_elapsed - 0.402) / (0.490 - 0.402), 0.0, 1.0)
+		var grav_t := fall_t * fall_t
+		body.position = Vector2(lerpf(0.0, 5.0, grav_t), lerpf(2.0, 11.0, grav_t))
+		body.scale = Vector2(BASE_SPRITE_SCALE.x * lerpf(1.0, 0.96, grav_t), BASE_SPRITE_SCALE.y * lerpf(1.0, 1.05, grav_t))
+	elif _death_anim_elapsed < 0.530:
+		# Момент важкого удару спиною/ранцем об ґрунт окопу (стискання від ваги)
+		var imp_t := clampf((_death_anim_elapsed - 0.490) / 0.040, 0.0, 1.0)
+		body.position = Vector2(5.0, lerpf(12.5, 9.0, imp_t))
+		body.scale = Vector2(BASE_SPRITE_SCALE.x * lerpf(1.08, 0.98, imp_t), BASE_SPRITE_SCALE.y * lerpf(0.91, 1.02, imp_t))
+	elif _death_anim_elapsed < 0.610:
+		# Невеликий відскок і повторне приземлення під вагою броні
+		var bnc_t := clampf((_death_anim_elapsed - 0.530) / 0.080, 0.0, 1.0)
+		var arc := sin(bnc_t * PI)
+		body.position = Vector2(5.0, 11.0 - arc * 3.0)
+		body.scale = Vector2(BASE_SPRITE_SCALE.x * (1.0 - arc * 0.02), BASE_SPRITE_SCALE.y * (1.0 + arc * 0.02))
+	else:
+		body.position = Vector2(5.0, 11.0)
+		body.scale = BASE_SPRITE_SCALE
+
+	# Короткий спалах від фатального удару переходить у чисті кольори героя
+	var flash_t := clampf(_death_anim_elapsed / 0.14, 0.0, 1.0)
+	body.modulate = Color(1.75, 0.62, 0.62, 1.0).lerp(Color(0.95, 0.94, 0.94, 1.0), flash_t)
+
+	# Розширення тіні під ранцем під час падіння
+	if shadow:
+		var fall_prog := clampf((_death_anim_elapsed - 0.36) / 0.14, 0.0, 1.0)
+		shadow.position = Vector2(lerpf(0.0, 18.0, fall_prog), lerpf(56.0, 52.0, fall_prog))
+		shadow.scale = Vector2(lerpf(1.28, 1.76, fall_prog), 1.26)
+
+	# Саме в момент падіння спиною на землю (step >= 14) — тряска екрана, клуби пилу й глухий удар
+	if step >= 14 and not _death_dust_spawned:
+		_death_dust_spawned = true
+		_spawn_trench_dust(global_position + Vector2(-4.0, 42.0), 0.45)
+		_spawn_trench_dust(global_position + Vector2(26.0, 44.0), 0.35)
+		_play_death_ground_thud()
+		_trigger_death_ground_shake()
+
+
+func _play_death_ground_thud() -> void:
+	var parent_node := get_parent()
+	if parent_node == null or not is_inside_tree():
+		return
+	var thud := AudioStreamPlayer.new()
+	thud.stream = DEATH_THUD_SOUND
+	thud.volume_db = -10.5
+	thud.pitch_scale = 1.58
+	parent_node.add_child(thud)
+	thud.finished.connect(thud.queue_free)
+	if thud.is_inside_tree():
+		thud.play()
+
+
+func _trigger_death_ground_shake() -> void:
+	var stage_node := get_parent()
+	if stage_node is Node2D:
+		var stage_2d := stage_node as Node2D
+		var base_pos := stage_2d.position
+		var tw := stage_2d.create_tween()
+		# Різкий вертикально-акцентований поштовх екрана від падіння важкого бійця
+		tw.tween_property(stage_2d, "position", base_pos + Vector2(-4.0, 9.5), 0.032)
+		tw.tween_property(stage_2d, "position", base_pos + Vector2(5.5, -7.0), 0.038)
+		tw.tween_property(stage_2d, "position", base_pos + Vector2(-4.5, 5.5), 0.042)
+		tw.tween_property(stage_2d, "position", base_pos + Vector2(3.0, -3.8), 0.045)
+		tw.tween_property(stage_2d, "position", base_pos + Vector2(-2.0, 2.4), 0.048)
+		tw.tween_property(stage_2d, "position", base_pos + Vector2(1.0, -1.2), 0.050)
+		tw.tween_property(stage_2d, "position", base_pos, 0.055)
+
+	if _hud_layer:
+		var htw := create_tween()
+		htw.tween_property(_hud_layer, "offset", Vector2(-2.5, 5.5), 0.035)
+		htw.tween_property(_hud_layer, "offset", Vector2(3.0, -4.0), 0.040)
+		htw.tween_property(_hud_layer, "offset", Vector2(-2.0, 2.5), 0.045)
+		htw.tween_property(_hud_layer, "offset", Vector2.ZERO, 0.060)
 
 
 func _create_bottom_left_bars() -> void:

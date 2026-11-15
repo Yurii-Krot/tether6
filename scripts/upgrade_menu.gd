@@ -13,6 +13,8 @@ const UPGRADE_DEFS: Array[Dictionary] = [
 var _transitioning := false
 var _hover_tween: Tween = null
 var _row_widgets: Dictionary = {}
+var _test_boss_btn: Button = null
+var _test_lvl10_btn: Button = null
 
 @onready var level_label: Label = $PanelFrame/HeaderBar/LevelLabel
 @onready var coins_label: Label = $PanelFrame/HeaderBar/CoinsLabel
@@ -33,6 +35,8 @@ func _ready() -> void:
 		next_button.mouse_exited.connect(_on_next_mouse_exited)
 		next_button.button_down.connect(_on_next_button_down)
 		next_button.button_up.connect(_on_next_button_up)
+
+	_create_test_level_buttons()
 
 	if fade_overlay:
 		fade_overlay.visible = true
@@ -209,12 +213,47 @@ func _on_next_button_up() -> void:
 	_hover_tween.tween_property(next_button, "scale", Vector2(1.04, 1.04), 0.09).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
+func _create_test_level_buttons() -> void:
+	var hbox := HBoxContainer.new()
+	hbox.name = "TestLevel10Box"
+	hbox.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	hbox.offset_left = 180.0
+	hbox.offset_top = -114.0
+	hbox.offset_right = 770.0
+	hbox.offset_bottom = -64.0
+	hbox.add_theme_constant_override("separation", 14)
+	add_child(hbox)
+	if fade_overlay:
+		move_child(hbox, fade_overlay.get_index())
+
+	_test_boss_btn = GAME_STATE.create_test_button("ТЕСТ: БОС 10 РІВНЯ", Color(0.46, 0.16, 0.14, 0.94))
+	_test_boss_btn.custom_minimum_size = Vector2(240.0, 48.0)
+	_test_boss_btn.pressed.connect(_on_test_level_10_pressed.bind(true))
+	hbox.add_child(_test_boss_btn)
+
+	_test_lvl10_btn = GAME_STATE.create_test_button("ТЕСТ: 10 РІВЕНЬ (ХВИЛЯ)", Color(0.20, 0.25, 0.17, 0.94))
+	_test_lvl10_btn.custom_minimum_size = Vector2(250.0, 48.0)
+	_test_lvl10_btn.pressed.connect(_on_test_level_10_pressed.bind(false))
+	hbox.add_child(_test_lvl10_btn)
+
+
+func _on_test_level_10_pressed(skip_to_boss: bool) -> void:
+	if _transitioning:
+		return
+	GAME_STATE.jump_to_test_level_10(skip_to_boss)
+	_on_next_pressed()
+
+
 func _on_next_pressed() -> void:
 	if _transitioning:
 		return
 	_transitioning = true
 	if next_button:
 		next_button.disabled = true
+	if _test_boss_btn:
+		_test_boss_btn.disabled = true
+	if _test_lvl10_btn:
+		_test_lvl10_btn.disabled = true
 
 	if fade_overlay:
 		fade_overlay.visible = true

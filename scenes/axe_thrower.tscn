@@ -30,7 +30,7 @@ polygon = PackedVector2Array(-30, 0, -21, -6, 0, -8.5, 21, -6, 30, 0, 21, 6, 0, 
 [node name="BodySprite" type="Sprite2D" parent="." unique_id=191500604]
 scale = Vector2(0.62, 0.62)
 texture = ExtResource("2_axe_sheet")
-offset = Vector2(-24, -8)
+offset = Vector2(-24, -32)
 hframes = 12
 vframes = 6
 

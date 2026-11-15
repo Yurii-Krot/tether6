@@ -20,7 +20,7 @@ scale = Vector2(0.64, 0.64)
 texture = ExtResource("4_player_sheet")
 offset = Vector2(46, -10)
 hframes = 6
-vframes = 4
+vframes = 8
 
 [node name="WeaponPivot" type="Node2D" parent="." unique_id=181100102]
 position = Vector2(-11.5, -7.5)

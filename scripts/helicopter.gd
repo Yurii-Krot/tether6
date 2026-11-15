@@ -1,15 +1,14 @@
 class_name Helicopter
 extends Node2D
 
-## Транспортний вертоліт: прилітає зліва, розвертається над полем бою,
-## висаджує десант по канатах прямо під собою та відлітає.
+## Транспортний вертоліт: прилітає справа (з тилу ворогів) носом уліво,
+## плавно зависає над полем бою без плоского розвороту, висаджує десант по канатах і летить далі вліво.
 
 signal trooper_drop_requested(unit_type: String, from_pos: Vector2, land_pos: Vector2)
 signal finished
 
 enum Phase {
 	ENTER,
-	TURN,
 	DESCEND,
 	DROP,
 	ROCKET_ATTACK,
@@ -34,9 +33,9 @@ const TAIL_ROTOR_RADIUS := 58.0
 const VISUAL_SCALE := 0.9
 
 @export var hover_position := Vector2(700.0, 165.0)
-@export var enter_from := Vector2(-460.0, 70.0)
+@export var enter_from := Vector2(1740.0, 70.0)
 @export var exit_to := Vector2(-560.0, 30.0)
-@export var enter_duration := 3.8
+@export var enter_duration := 3.4
 @export var drop_interval := 0.6
 @export var rocket_count := 4
 @export var rocket_interval := 1.05
@@ -113,8 +112,8 @@ func _ready() -> void:
 
 	_create_ground_shadow()
 
-	# Прилітає зліва носом уперед (вправо), тому спочатку дзеркалимо спрайт
-	_visual.scale = Vector2(-VISUAL_SCALE, VISUAL_SCALE)
+	# Прилітає справа вже носом уперед (вліво), тому без дзеркалення і без розвороту
+	_visual.scale = Vector2(VISUAL_SCALE, VISUAL_SCALE)
 	_main_angle = randf() * TAU
 	_base_pos = enter_from
 	global_position = enter_from
@@ -142,24 +141,12 @@ func _process(delta: float) -> void:
 	match _phase:
 		Phase.ENTER:
 			var t := clampf(_phase_time / enter_duration, 0.0, 1.0)
-			# Швидкий підліт і плавне гальмування над точкою висадки
+			# Швидкий підліт справа і плавне гальмування над точкою висадки
 			var e := 1.0 - pow(1.0 - t, 2.6)
 			_base_pos = enter_from.lerp(hover_position + Vector2(0.0, -18.0), e)
 			_base_pos.y -= sin(t * PI) * 22.0
 			_hover_amount = lerpf(0.0, 1.0, clampf((t - 0.7) / 0.3, 0.0, 1.0))
 			if t >= 1.0:
-				_set_phase(Phase.TURN)
-		Phase.TURN:
-			# Розворот на 180° носом до окопу (класичний 2D-розворот через стискання по X)
-			var t := clampf(_phase_time / 1.0, 0.0, 1.0)
-			var s := -cos(t * PI)
-			_visual.scale.x = VISUAL_SCALE * s
-			if absf(s) < 0.12:
-				_visual.scale.x = 0.12 * VISUAL_SCALE * (signf(s) if s != 0.0 else 1.0)
-			_base_pos = hover_position + Vector2(0.0, -18.0 - sin(t * PI) * 8.0)
-			_hover_amount = 1.0
-			if t >= 1.0:
-				_visual.scale.x = VISUAL_SCALE
 				_set_phase(Phase.DESCEND)
 		Phase.DESCEND:
 			var t := clampf(_phase_time / 0.7, 0.0, 1.0)
@@ -178,14 +165,14 @@ func _process(delta: float) -> void:
 			_process_rocket_attack(delta)
 		Phase.ASCEND:
 			var t := clampf(_phase_time / 0.8, 0.0, 1.0)
-			_base_pos = hover_position + Vector2(10.0 * t, -30.0 * t * t)
+			_base_pos = hover_position + Vector2(-10.0 * t, -30.0 * t * t)
 			if t >= 1.0:
 				_set_phase(Phase.LEAVE)
 		Phase.LEAVE:
-			# Відлітає вліво носом уперед з наростаючою швидкістю
+			# Продовжує політ далі вліво носом уперед з наростаючою швидкістю
 			var t := clampf(_phase_time / 3.6, 0.0, 1.0)
 			var e := pow(t, 2.1)
-			var from := hover_position + Vector2(10.0, -30.0)
+			var from := hover_position + Vector2(-10.0, -30.0)
 			_base_pos = from.lerp(exit_to, e)
 			_hover_amount = lerpf(1.0, 0.0, clampf(t * 2.5, 0.0, 1.0))
 			if t >= 1.0:
@@ -355,13 +342,17 @@ func _update_effects(delta: float) -> void:
 	if _ground_shadow:
 		_ground_shadow.global_position = Vector2(global_position.x - 10.0, ground_dust_y - 70.0)
 		var alt := clampf(1.0 - absf(global_position.y - hover_position.y) / 220.0, 0.0, 1.0)
-		var on_screen := clampf((global_position.x + 200.0) / 300.0, 0.0, 1.0)
+		var left_vis := clampf((global_position.x + 200.0) / 300.0, 0.0, 1.0)
+		var right_vis := clampf((1480.0 - global_position.x) / 300.0, 0.0, 1.0)
+		var on_screen := minf(left_vis, right_vis)
 		_ground_shadow.modulate.a = 0.55 * alt * on_screen
 		_ground_shadow.scale = Vector2(lerpf(0.8, 1.0, alt), 1.0)
 
-	# Плавне регулювання гучності гвинтів залежно від положення вертольота на екрані (трохи тихіше, щоб не глушило постріли)
+	# Плавне регулювання гучності гвинтів при підльоті справа та відльоті вліво
 	if _rotor_sound:
-		var screen_presence := clampf((global_position.x + 360.0) / 520.0, 0.0, 1.0)
+		var left_audio := clampf((global_position.x + 360.0) / 520.0, 0.0, 1.0)
+		var right_audio := clampf((1640.0 - global_position.x) / 520.0, 0.0, 1.0)
+		var screen_presence := minf(left_audio, right_audio)
 		_rotor_sound.volume_db = lerpf(-26.0, -10.5, screen_presence)
 
 	# Пил від потоку повітря з гвинта, що розлітається по полю в обидва боки

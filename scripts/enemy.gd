@@ -18,9 +18,71 @@ const ENEMY_ROW_DEATH := 3
 const GRENADIER_ROCKET_SCRIPT := preload("res://scripts/grenadier_rocket.gd")
 const AXE_PROJECTILE_SCRIPT := preload("res://scripts/axe_projectile.gd")
 const WARNING_BEEP_STREAM := preload("res://assets/warning_beep.mp3")
+const DEATH_SHEET_CONFIGS: Dictionary = {
+	"res://assets/enemy_spritesheet.png": {
+		"texture": preload("res://assets/enemy_death_sheet.png"),
+		"offset": Vector2(32.0, -6.0),
+	},
+	"res://assets/shotgunner_spritesheet.png": {
+		"texture": preload("res://assets/shotgunner_death_sheet.png"),
+		"offset": Vector2(20.0, -6.0),
+	},
+	"res://assets/grenadier_spritesheet.png": {
+		"texture": preload("res://assets/grenadier_death_sheet.png"),
+		"offset": Vector2(52.0, -6.0),
+	},
+	"res://assets/boss_grenadier_spritesheet.png": {
+		"texture": preload("res://assets/boss_grenadier_death_sheet.png"),
+		"offset": Vector2(46.0, -6.0),
+	},
+	"res://assets/heavy_gunner_spritesheet.png": {
+		"texture": preload("res://assets/heavy_gunner_death_sheet.png"),
+		"offset": Vector2(55.0, -6.0),
+	},
+	"res://assets/sniper_spritesheet.png": {
+		"texture": preload("res://assets/sniper_death_sheet.png"),
+		"offset": Vector2(24.0, -6.0),
+	},
+	"res://assets/axe_thrower_spritesheet.png": {
+		"texture": preload("res://assets/axe_thrower_death_sheet.png"),
+		"offset": Vector2(40.0, -20.0),
+	},
+	"res://assets/boss_hammer_spritesheet.png": {
+		"texture": preload("res://assets/boss_hammer_death_sheet.png"),
+		"offset": Vector2(22.0, -20.0),
+	},
+}
 const TRENCH_TILES_Y: Array[float] = [395.0, 495.0, 595.0]
 const TILE_HALF_HEIGHT := 48.0
 const TILE_HALF_WIDTH := 42.0
+
+# Крива падіння з прискоренням гравітації: поштовх -> втрата рівноваги на п'ятах -> стрімкий зрив (g*t^2) -> важкий удар спиною -> удар ніг/зброї -> розчинення
+const ENEMY_DEATH_FRAME_TIMES: Array[float] = [
+	0.000, # 0: Влучання кулі
+	0.032, # 1: Різке відкидання верхньої частини корпусу
+	0.082, # 2: Миттєве зависання в нестійкій точці перед зривом
+	0.132, # 3: Втрата рівноваги, гравітація тягне назад
+	0.168, # 4: Прискорення падіння (вільний зрив)
+	0.194, # 5: Стрімке наближення ранця до ґрунту
+	0.215, # 6: Остання мить перед зіткненням із землею
+	0.234, # 7: Важкий удар спиною та стиск ранця об ґрунт!
+	0.256, # 8: Потужний удар зброєю за шолом об землю
+	0.280, # 9: Мікровіддача корпусу, ноги стрімко падають вниз
+	0.302, # 10: Прискорене падіння важких берців
+	0.322, # 11: Гучний удар берців і кінцівки по ґрунту!
+	0.340, # 12: Важке осідання тіла без відскоку
+	0.365, # 13: Повне притискання до землі
+	0.405, # 14: Нерухомий спокій
+	0.460, # 15: Спокій
+	0.540, # 16: Спокій
+	0.650, # 17: Спокій
+	0.780, # 18: Спокій
+	0.920, # 19: Спокій
+	1.060, # 20: Початок розчинення тіла
+	1.180, # 21: Напівпрозоре згасання #1
+	1.300, # 22: Напівпрозоре згасання #2
+	1.420, # 23: Майже повне зникнення
+]
 
 @export var health := 80.0
 @export var speed := 155.0
@@ -40,6 +102,12 @@ const TILE_HALF_WIDTH := 42.0
 @export var trench_launcher_rocket_count := 1
 @export var use_axe_throw := false
 @export var axe_flight_duration := 0.85
+@export var use_hammer_sweep := false
+@export var hammer_sweep_step_interval := 0.35
+@export var hammer_sweep_cycles := 2
+@export var hammer_flight_duration := 0.85
+@export var use_exhaust_smoke := false
+@export var smoke_pipe_offsets: Array[Vector2] = [Vector2(81.0, -72.0), Vector2(106.0, -64.0)]
 @export var is_boss := false
 ## Швидкість програвання 24-кадрового циклу бігу (кадрів/с). 21 ≈ темп референсного відео (цикл ≈ 1.15 с)
 @export var run_anim_fps := 24.0
@@ -72,13 +140,24 @@ var _shoot_anim_duration := 0.24
 var _hurt_anim_timer := 0.0
 var _hurt_anim_duration := 0.14
 var _hit_flash_timer := 0.0
+var _hit_knockback_vx := 0.0
 var _death_anim_timer := 0.0
 var _death_anim_duration := 0.48
 var _blood_splashed := false
+var _boot_slapped := false
+var _using_custom_death_sheet := false
 var _base_sprite_scale := Vector2(0.62, 0.62)
+var _base_shadow_scale := Vector2.ONE
 var _last_step_col := -1
 var _burst_shots_remaining := 0
 var _burst_timer := 0.0
+var _pending_axe_throw := false
+var _pending_axe_delay := 0.0
+var _hammer_sweep_queue: Array[int] = []
+var _hammer_sweep_timer := 0.0
+var _pending_hammer_throws: Array[Dictionary] = []
+var _smoke_spawn_timer := 0.0
+var _smoke_pipe_toggle := 0
 
 # Десантування з вертольота по канату (fast-rope)
 var _rappel_active := false
@@ -116,6 +195,8 @@ func _ready() -> void:
 
 	if body_sprite:
 		_base_sprite_scale = body_sprite.scale
+	if shadow:
+		_base_shadow_scale = shadow.scale
 	if use_sniper_laser:
 		_shoot_anim_duration = 0.42
 		if is_equal_approx(projectile_speed, 540.0):
@@ -124,7 +205,9 @@ func _ready() -> void:
 		# Довша тривалість анімації пострілу дробовика, щоб було добре видно пересмикування помпової цівки та виліт гільзи
 		_shoot_anim_duration = 0.48
 	elif use_axe_throw:
-		_shoot_anim_duration = 0.52
+		_shoot_anim_duration = 0.60
+	elif use_hammer_sweep:
+		_shoot_anim_duration = clampf(hammer_sweep_step_interval * 0.88, 0.16, 0.32)
 	if shot_line:
 		shot_line.visible = false
 	if body_rect:
@@ -163,10 +246,12 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_update_sprite_animation(delta)
+	if use_exhaust_smoke and state != State.DEAD:
+		_process_exhaust_smoke(delta)
 
 	match state:
 		State.ADVANCE:
-			_process_advance()
+			_process_advance(delta)
 		State.ATTACK:
 			_process_attack(delta)
 		State.DEAD:
@@ -283,6 +368,55 @@ func _update_sprite_animation(delta: float) -> void:
 
 	if state == State.DEAD:
 		_death_anim_timer += delta
+		if _using_custom_death_sheet:
+			var step := 0
+			for i in range(ENEMY_DEATH_FRAME_TIMES.size() - 1, -1, -1):
+				if _death_anim_timer >= ENEMY_DEATH_FRAME_TIMES[i]:
+					step = i
+					break
+			body_sprite.frame_coords = Vector2i(step % 6, int(step / 6))
+
+			# Важке прискорення падіння під гравітацією (t^2) до моменту зіткнення із землею
+			if step >= 2 and step <= 6:
+				var fall_t := clampf((_death_anim_timer - 0.082) / (0.234 - 0.082), 0.0, 1.0)
+				var grav := fall_t * fall_t
+				body_sprite.position = Vector2(lerpf(0.0, 2.0, fall_t), lerpf(0.0, 5.0, grav))
+				var stretch_y := 1.0 + sin(fall_t * PI) * 0.045
+				var stretch_x := 1.0 - sin(fall_t * PI) * 0.030
+				body_sprite.scale = Vector2(_base_sprite_scale.x * stretch_x, _base_sprite_scale.y * stretch_y)
+			elif not _blood_splashed:
+				body_sprite.position = Vector2.ZERO
+
+			var weight_mult := 1.55 if use_hammer_sweep else (1.35 if is_boss else 1.0)
+			if step >= 7 and not _blood_splashed:
+				_blood_splashed = true
+				_spawn_ground_blood_splatter()
+				var impact_center := global_position + Vector2(17.0, 110.0 if use_hammer_sweep else (88.0 if is_boss else 41.0))
+				_spawn_death_dust(impact_center, true, weight_mult)
+				_trigger_death_shake(weight_mult)
+				if is_inside_tree():
+					body_sprite.scale = Vector2(_base_sprite_scale.x * 1.15, _base_sprite_scale.y * 0.85)
+					body_sprite.position = Vector2(2.0, 5.5)
+					var impact_tween := create_tween()
+					impact_tween.set_parallel(true)
+					impact_tween.tween_property(body_sprite, "scale", _base_sprite_scale, 0.13).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+					impact_tween.tween_property(body_sprite, "position", Vector2(0.0, 1.5), 0.11).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+			if step >= 11 and not _boot_slapped:
+				_boot_slapped = true
+				var leg_center := global_position + Vector2(-12.0, 110.0 if use_hammer_sweep else (88.0 if is_boss else 41.0))
+				_spawn_death_dust(leg_center, false, weight_mult * 0.65)
+				if is_inside_tree():
+					body_sprite.scale = Vector2(_base_sprite_scale.x * 1.045, _base_sprite_scale.y * 0.955)
+					var boot_tween := create_tween()
+					boot_tween.tween_property(body_sprite, "scale", _base_sprite_scale, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+			if shadow:
+				var sh_prog := clampf((_death_anim_timer - 0.08) / 0.17, 0.0, 1.0)
+				shadow.position = Vector2(lerpf(0.0, 26.0 * weight_mult, sh_prog), shadow.position.y)
+				shadow.scale = Vector2(_base_shadow_scale.x * lerpf(1.0, 1.75, sh_prog), _base_shadow_scale.y * lerpf(1.0, 0.92, sh_prog))
+			return
+
 		var raw_t := clampf(_death_anim_timer / _death_anim_duration, 0.0, 1.0)
 		var gravity_t := raw_t if is_six_row else pow(raw_t, 1.65)
 		var d_col := clampi(int(gravity_t * float(cols)), 0, cols - 1)
@@ -306,7 +440,7 @@ func _update_sprite_animation(delta: float) -> void:
 
 		if shadow:
 			shadow.position = Vector2(lerpf(0.0, 14.0, gravity_t), shadow.position.y)
-			shadow.scale = Vector2(lerpf(1.0, 1.55, gravity_t), lerpf(1.0, 0.92, gravity_t))
+			shadow.scale = Vector2(_base_shadow_scale.x * lerpf(1.0, 1.55, gravity_t), _base_shadow_scale.y * lerpf(1.0, 0.92, gravity_t))
 		return
 
 	if _hurt_anim_timer > 0.0:
@@ -319,7 +453,11 @@ func _update_sprite_animation(delta: float) -> void:
 
 	if _shoot_anim_timer > 0.0:
 		_shoot_anim_timer = maxf(_shoot_anim_timer - delta, 0.0)
-		var s_prog := 1.0 - (_shoot_anim_timer / _shoot_anim_duration)
+		body_sprite.position = Vector2.ZERO
+		body_sprite.scale = _base_sprite_scale
+		if shadow:
+			shadow.scale = _base_shadow_scale
+		var s_prog := 1.0 - (_shoot_anim_timer / maxf(_shoot_anim_duration, 0.01))
 		if is_six_row:
 			var s_col := clampi(1 + int(s_prog * float(cols - 1)), 1, cols - 1)
 			body_sprite.frame_coords = Vector2i(s_col, row_shoot)
@@ -329,6 +467,8 @@ func _update_sprite_animation(delta: float) -> void:
 		return
 
 	if state == State.ADVANCE:
+		body_sprite.position = Vector2.ZERO
+		body_sprite.scale = _base_sprite_scale
 		if is_six_row:
 			# 24-кадрова покадрова анімація бігу у 2 рядках (Рядок 0 + Рядок 1, по 12 кадрів у кожному)
 			var walk_fps_24 := run_anim_fps
@@ -341,7 +481,7 @@ func _update_sprite_animation(delta: float) -> void:
 			var cycle_phase := (_anim_time * walk_fps_24 / float(total_walk_frames)) * TAU
 			if shadow:
 				var stride_width := cos(cycle_phase * 2.0)
-				shadow.scale = Vector2(1.0 + 0.14 * stride_width, 1.0 - 0.05 * stride_width)
+				shadow.scale = Vector2(_base_shadow_scale.x * (1.0 + 0.14 * stride_width), _base_shadow_scale.y * (1.0 - 0.05 * stride_width))
 
 			if step_idx != _last_step_col:
 				_last_step_col = step_idx
@@ -357,7 +497,7 @@ func _update_sprite_animation(delta: float) -> void:
 			var cycle_phase := (_anim_time * walk_fps / float(cols)) * TAU
 			if shadow:
 				var stride_width := cos(cycle_phase * 2.0)
-				shadow.scale = Vector2(1.0 + 0.12 * stride_width, 1.0 - 0.05 * stride_width)
+				shadow.scale = Vector2(_base_shadow_scale.x * (1.0 + 0.12 * stride_width), _base_shadow_scale.y * (1.0 - 0.05 * stride_width))
 
 			if walk_col != _last_step_col:
 				_last_step_col = walk_col
@@ -375,7 +515,7 @@ func _update_sprite_animation(delta: float) -> void:
 	else:
 		# У режимі атаки між пострілами тримає бойову стійку
 		if shadow:
-			shadow.scale = Vector2(2.24, 2.24) if is_boss else Vector2.ONE
+			shadow.scale = _base_shadow_scale
 		if is_six_row:
 			body_sprite.frame_coords = Vector2i(0, row_shoot)
 			if is_boss:
@@ -390,15 +530,22 @@ func _update_sprite_animation(delta: float) -> void:
 			body_sprite.frame_coords = Vector2i(ready_col, row_shoot)
 
 
-func _process_advance() -> void:
+func _process_advance(delta: float) -> void:
+	var prev_kb := _hit_knockback_vx
+	_hit_knockback_vx = move_toward(_hit_knockback_vx, 0.0, 1750.0 * delta)
+	var avg_kb := (prev_kb + _hit_knockback_vx) * 0.5
 	var trench_x := _get_trench_x()
 	var target_x := _stop_x if _has_custom_stop_x else maxf(_stop_x, trench_x + stop_distance - 60.0)
-	if global_position.x <= target_x:
+	if global_position.x <= target_x and avg_kb <= speed:
 		velocity = Vector2.ZERO
+		_hit_knockback_vx = 0.0
 		state = State.ATTACK
 		return
 
-	velocity = Vector2.LEFT * speed
+	var move_vx := -speed + avg_kb
+	if global_position.x >= 1255.0 and move_vx > 0.0:
+		move_vx = 0.0
+	velocity = Vector2(move_vx, 0.0)
 	move_and_slide()
 
 
@@ -409,6 +556,8 @@ func _process_attack(delta: float) -> void:
 	if body_sprite != null:
 		if use_sniper_laser:
 			muzzle_offset = Vector2(-114.0, -8.0)
+		elif use_hammer_sweep:
+			muzzle_offset = Vector2(-64.0, -78.0)
 		elif use_axe_throw:
 			muzzle_offset = Vector2(-68.0, -24.0)
 		elif use_trench_tile_launcher:
@@ -420,6 +569,33 @@ func _process_attack(delta: float) -> void:
 		else:
 			muzzle_offset = Vector2(-75.0, 0.0)
 	var muzzle_pos := global_position + muzzle_offset
+
+	if _pending_axe_throw:
+		_pending_axe_delay -= delta
+		if _pending_axe_delay <= 0.0:
+			_pending_axe_throw = false
+			_launch_axe_projectile(global_position + Vector2(-72.0, -34.0))
+
+	if not _pending_hammer_throws.is_empty():
+		for i in range(_pending_hammer_throws.size() - 1, -1, -1):
+			var entry: Dictionary = _pending_hammer_throws[i]
+			entry["delay"] = float(entry["delay"]) - delta
+			if float(entry["delay"]) <= 0.0:
+				var t_idx := int(entry["tile_idx"])
+				_pending_hammer_throws.remove_at(i)
+				_launch_hammer_projectile(muzzle_pos, t_idx)
+			else:
+				_pending_hammer_throws[i] = entry
+
+	if not _hammer_sweep_queue.is_empty():
+		_hammer_sweep_timer -= delta
+		if _hammer_sweep_timer <= 0.0:
+			var next_tile_idx: int = _hammer_sweep_queue.pop_front()
+			_hammer_sweep_timer = maxf(hammer_sweep_step_interval, 0.08)
+			_trigger_hammer_sweep_throw(next_tile_idx, _hammer_sweep_queue.is_empty())
+			if _hammer_sweep_queue.is_empty():
+				_attack_timer = attack_interval
+		return
 
 	# Якщо триває черга пострілів (наприклад, 8 куль поспіль у кулеметника)
 	if _burst_shots_remaining > 0:
@@ -433,9 +609,9 @@ func _process_attack(delta: float) -> void:
 		return
 
 	_attack_timer -= delta
-	var lock_window := 0.0 if use_axe_throw else (0.30 if use_trench_tile_launcher else (0.85 if use_sniper_laser else 0.38))
+	var lock_window := 0.0 if (use_axe_throw or use_hammer_sweep) else (0.30 if use_trench_tile_launcher else (0.85 if use_sniper_laser else 0.38))
 
-	if not shoot_straight and not use_axe_throw and _attack_timer <= lock_window and _attack_timer > 0.0 and not _has_locked_aim:
+	if not shoot_straight and not use_axe_throw and not use_hammer_sweep and _attack_timer <= lock_window and _attack_timer > 0.0 and not _has_locked_aim:
 		if use_trench_tile_launcher:
 			_locked_aim_positions = _choose_trench_tile_targets(maxi(trench_launcher_rocket_count, 1))
 			_locked_aim_pos = _locked_aim_positions[0] if not _locked_aim_positions.is_empty() else _choose_trench_tile_target()
@@ -455,12 +631,132 @@ func _process_attack(delta: float) -> void:
 	if _attack_timer <= 0.0:
 		if _target_marker:
 			_target_marker.visible = false
+		if use_hammer_sweep:
+			_start_hammer_sweep_barrage()
+			_has_locked_aim = false
+			return
 		_burst_shots_remaining = maxi(burst_count, 1) - 1
 		_burst_timer = burst_interval
 		_perform_attack(muzzle_pos)
 		if _burst_shots_remaining == 0:
 			_attack_timer = attack_interval
 		_has_locked_aim = false
+
+
+func _launch_axe_projectile(release_pos: Vector2) -> void:
+	var target_tile := _choose_trench_tile_target()
+	var parent_node := get_parent()
+	if parent_node != null:
+		var axe: Node2D = AXE_PROJECTILE_SCRIPT.new()
+		axe.setup(release_pos, target_tile, attack_damage, axe_flight_duration)
+		parent_node.add_child(axe)
+
+
+func _start_hammer_sweep_barrage() -> void:
+	_hammer_sweep_queue.clear()
+	var cycles := maxi(hammer_sweep_cycles, 1)
+	var tile_count := TRENCH_TILES_Y.size()
+	for _c in range(cycles):
+		for t_idx in range(tile_count):
+			_hammer_sweep_queue.append(t_idx)
+
+	if _hammer_sweep_queue.is_empty():
+		_attack_timer = attack_interval
+		return
+
+	var first_idx: int = _hammer_sweep_queue.pop_front()
+	_hammer_sweep_timer = maxf(hammer_sweep_step_interval, 0.08)
+	_trigger_hammer_sweep_throw(first_idx, _hammer_sweep_queue.is_empty())
+	if _hammer_sweep_queue.is_empty():
+		_attack_timer = attack_interval
+
+
+func _trigger_hammer_sweep_throw(tile_idx: int, is_final_throw: bool) -> void:
+	_shoot_anim_duration = 0.42 if is_final_throw else clampf(hammer_sweep_step_interval * 0.88, 0.16, 0.32)
+	_shoot_anim_timer = _shoot_anim_duration
+	if body_sprite:
+		var is_six_row := body_sprite.vframes >= 6
+		body_sprite.frame_coords = Vector2i(2 if is_six_row else 0, 2 if is_six_row else ENEMY_ROW_SHOOT)
+	if shot_sound and shot_sound.stream != null:
+		shot_sound.pitch_scale = randf_range(0.86, 1.04)
+		shot_sound.play()
+
+	var release_delay := _shoot_anim_duration * (5.0 / 11.0)
+	_pending_hammer_throws.append({
+		"delay": release_delay,
+		"tile_idx": tile_idx
+	})
+
+
+func _launch_hammer_projectile(release_pos: Vector2, tile_idx: int) -> void:
+	var tx := _get_trench_x() + randf_range(-8.0, 8.0)
+	var clamped_idx := clampi(tile_idx, 0, TRENCH_TILES_Y.size() - 1)
+	var target_tile := Vector2(tx, TRENCH_TILES_Y[clamped_idx])
+	var parent_node := get_parent()
+	if parent_node != null:
+		var hammer: Node2D = AXE_PROJECTILE_SCRIPT.new()
+		hammer.setup(release_pos, target_tile, attack_damage, hammer_flight_duration, true)
+		parent_node.add_child(hammer)
+
+
+func _process_exhaust_smoke(delta: float) -> void:
+	if smoke_pipe_offsets.is_empty():
+		return
+	_smoke_spawn_timer -= delta
+	if _smoke_spawn_timer > 0.0:
+		return
+	_smoke_spawn_timer = randf_range(0.07, 0.11)
+	_smoke_pipe_toggle = (_smoke_pipe_toggle + 1) % smoke_pipe_offsets.size()
+	var pipe_cell_offset := smoke_pipe_offsets[_smoke_pipe_toggle]
+	var nozzle_local := pipe_cell_offset
+	if body_sprite:
+		nozzle_local = (pipe_cell_offset + body_sprite.offset) * body_sprite.scale + body_sprite.position
+	_spawn_exhaust_smoke_puff(global_position + nozzle_local)
+
+
+func _spawn_exhaust_smoke_puff(spawn_pos: Vector2) -> void:
+	var parent_node := get_parent()
+	if parent_node == null:
+		return
+
+	var puff := Node2D.new()
+	puff.global_position = spawn_pos + Vector2(randf_range(-2.5, 2.5), randf_range(-2.5, 2.0))
+	puff.z_index = -1
+	puff.scale = Vector2(0.72, 0.72)
+
+	var outer := Polygon2D.new()
+	outer.color = Color(0.84, 0.83, 0.82, 0.48)
+	var r := randf_range(6.5, 10.0)
+	var pts := PackedVector2Array()
+	for i in range(10):
+		var a := float(i) * TAU / 10.0
+		var rad := r * (0.85 + 0.25 * sin(float(i) * 2.7))
+		pts.append(Vector2(cos(a) * rad, sin(a) * rad * 0.85))
+	outer.polygon = pts
+	puff.add_child(outer)
+
+	var core := Polygon2D.new()
+	core.color = Color(0.95, 0.94, 0.93, 0.34)
+	core.position = Vector2(-1.5, -1.5)
+	var cpts := PackedVector2Array()
+	for i in range(8):
+		var a := float(i) * TAU / 8.0
+		cpts.append(Vector2(cos(a) * (r * 0.62), sin(a) * (r * 0.56)))
+	core.polygon = cpts
+	puff.add_child(core)
+
+	parent_node.add_child(puff)
+
+	var drift := Vector2(randf_range(16.0, 32.0), randf_range(-68.0, -44.0))
+	var dur := randf_range(0.92, 1.28)
+	var end_scale := randf_range(1.85, 2.55)
+	var tw := puff.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(puff, "global_position", puff.global_position + drift, dur).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(puff, "scale", Vector2(end_scale, end_scale), dur).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(puff, "rotation", randf_range(-0.7, 0.7), dur)
+	tw.tween_property(puff, "modulate:a", 0.0, dur)
+	tw.chain().tween_callback(puff.queue_free)
 
 
 func _perform_attack(muzzle_pos: Vector2) -> void:
@@ -480,12 +776,9 @@ func _perform_attack(muzzle_pos: Vector2) -> void:
 		shot_sound.play()
 
 	if use_axe_throw:
-		var target_tile := _choose_trench_tile_target()
-		var parent_node := get_parent()
-		if parent_node != null:
-			var axe: Node2D = AXE_PROJECTILE_SCRIPT.new()
-			axe.setup(muzzle_pos, target_tile, attack_damage, axe_flight_duration)
-			parent_node.add_child(axe)
+		# Випускаємо сокиру точно у момент хлиста вперед (кадр 6 з 12, ≈ 45% анімації)
+		_pending_axe_throw = true
+		_pending_axe_delay = _shoot_anim_duration * (5.0 / 11.0)
 		return
 
 	if use_trench_tile_launcher:
@@ -557,7 +850,8 @@ func _spawn_step_dust(is_near_foot: bool) -> void:
 	if parent_node == null:
 		return
 
-	var foot_offset := Vector2(-14.0, 43.0) if is_near_foot else Vector2(-19.0, 41.0)
+	var foot_y := 114.0 if use_hammer_sweep else (96.0 if is_boss else 43.0)
+	var foot_offset := Vector2(-14.0, foot_y) if is_near_foot else Vector2(-19.0, foot_y - 2.0)
 	for i in range(2):
 		var puff := Polygon2D.new()
 		puff.color = Color(0.58, 0.49, 0.38, 0.48)
@@ -630,10 +924,17 @@ func take_damage(amount: float) -> bool:
 		return true
 
 	_show_hp_bar()
-	_hurt_anim_timer = _hurt_anim_duration
-	if body_sprite:
-		var is_six_row := body_sprite.vframes >= 6
-		body_sprite.frame_coords = Vector2i(0, 3 if is_six_row else ENEMY_ROW_HURT)
+	if state == State.ADVANCE and not _rappel_active and speed > 0.0:
+		# Легке відштовхування назад при влучанні в ворога під час бігу
+		if is_boss:
+			_hit_knockback_vx = clampf(maxf(_hit_knockback_vx, speed + 38.0), 0.0, speed + 45.0)
+		else:
+			_hit_knockback_vx = clampf(maxf(_hit_knockback_vx, speed + 115.0), 0.0, speed + 135.0)
+	if not is_boss:
+		_hurt_anim_timer = _hurt_anim_duration
+		if body_sprite:
+			var is_six_row := body_sprite.vframes >= 6
+			body_sprite.frame_coords = Vector2i(0, 3 if is_six_row else ENEMY_ROW_HURT)
 	_flash_hit()
 	return false
 
@@ -641,6 +942,10 @@ func take_damage(amount: float) -> bool:
 func _enter_dead_state() -> void:
 	var was_rappelling := _rappel_active
 	_rappel_active = false
+	_hit_knockback_vx = 0.0
+	_pending_axe_throw = false
+	_hammer_sweep_queue.clear()
+	_pending_hammer_throws.clear()
 	_hit_flash_timer = 0.0
 	_release_rope()
 	state = State.DEAD
@@ -679,25 +984,39 @@ func _enter_dead_state() -> void:
 		var drop_tween := create_tween()
 		drop_tween.tween_property(self, "global_position", _rappel_to, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
+	if body_sprite and body_sprite.texture != null:
+		var tex_path := body_sprite.texture.resource_path
+		if DEATH_SHEET_CONFIGS.has(tex_path):
+			var cfg: Dictionary = DEATH_SHEET_CONFIGS[tex_path]
+			_using_custom_death_sheet = true
+			_boot_slapped = false
+			body_sprite.texture = cfg["texture"]
+			body_sprite.hframes = 6
+			body_sprite.vframes = 4
+			body_sprite.frame_coords = Vector2i(0, 0)
+			body_sprite.offset = cfg["offset"]
+			body_sprite.modulate = Color.WHITE
+
 	if is_inside_tree():
 		if body_sprite:
-			var is_six_row := body_sprite.vframes >= 6
-			body_sprite.frame_coords = Vector2i(0, 4 if is_six_row else ENEMY_ROW_DEATH)
-			if is_six_row:
-				body_sprite.modulate = Color.WHITE
-				var fall_tween := create_tween()
-				fall_tween.tween_property(body_sprite, "position", Vector2(10.0, 4.0), 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			else:
-				body_sprite.modulate = Color(1.6, 0.55, 0.55, 1.0)
-				# Інерційний зсув тіла назад під час падіння під власною вагою
-				var fall_tween := create_tween()
-				fall_tween.set_parallel(true)
-				fall_tween.tween_property(body_sprite, "position", Vector2(16.0, 8.0), 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-				fall_tween.tween_property(body_sprite, "modulate", Color(0.75, 0.65, 0.65, 1.0), 0.28)
+			if not _using_custom_death_sheet:
+				var is_six_row := body_sprite.vframes >= 6
+				body_sprite.frame_coords = Vector2i(0, 4 if is_six_row else ENEMY_ROW_DEATH)
+				if is_six_row:
+					body_sprite.modulate = Color.WHITE
+					var fall_tween := create_tween()
+					fall_tween.tween_property(body_sprite, "position", Vector2(10.0, 4.0), 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				else:
+					body_sprite.modulate = Color(1.6, 0.55, 0.55, 1.0)
+					# Інерційний зсув тіла назад під час падіння під власною вагою
+					var fall_tween := create_tween()
+					fall_tween.set_parallel(true)
+					fall_tween.tween_property(body_sprite, "position", Vector2(16.0, 8.0), 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+					fall_tween.tween_property(body_sprite, "modulate", Color(0.75, 0.65, 0.65, 1.0), 0.28)
 
 			var cleanup_tween := create_tween()
-			cleanup_tween.tween_interval(1.35)
-			cleanup_tween.tween_property(self, "modulate:a", 0.0, 0.25)
+			cleanup_tween.tween_interval(1.54 if _using_custom_death_sheet else 1.45)
+			cleanup_tween.tween_property(self, "modulate:a", 0.0, 0.28)
 			cleanup_tween.tween_callback(queue_free)
 		else:
 			var tween := create_tween()
@@ -711,10 +1030,10 @@ func _enter_dead_state() -> void:
 
 func _spawn_ground_blood_splatter() -> void:
 	var parent_node := get_parent()
-	if parent_node == null:
+	if parent_node == null or not is_inside_tree():
 		return
 
-	var impact_center := global_position + Vector2(17.0, 41.0)
+	var impact_center := global_position + Vector2(17.0, 110.0 if use_hammer_sweep else (88.0 if is_boss else 41.0))
 
 	# 1. Калюжа крові на землі під тілом (як у The Peacekeeper)
 	var puddle := Node2D.new()
@@ -780,6 +1099,73 @@ func _spawn_ground_blood_splatter() -> void:
 		dtween.tween_interval(1.8)
 		dtween.tween_property(drop, "modulate:a", 0.0, 0.6)
 		dtween.tween_callback(drop.queue_free)
+
+
+func _spawn_death_dust(origin_pos: Vector2, is_main_impact: bool, weight_mult: float) -> void:
+	var parent_node := get_parent()
+	if parent_node == null or not is_inside_tree():
+		return
+	var puff_count := (8 if weight_mult > 1.2 else 6) if is_main_impact else 4
+	for i in range(puff_count):
+		var puff := Polygon2D.new()
+		var r := randf_range(4.5, 9.0) * (0.75 + 0.25 * weight_mult)
+		puff.polygon = PackedVector2Array([
+			Vector2(-r * 1.15, -r * 0.45),
+			Vector2(-r * 0.35, -r * 0.90),
+			Vector2(r * 0.70, -r * 0.80),
+			Vector2(r * 1.15, 0.0),
+			Vector2(r * 0.50, r * 0.65),
+			Vector2(-r * 0.85, r * 0.60),
+		])
+		puff.color = Color(0.46, 0.41, 0.35, 0.60 if is_main_impact else 0.44)
+		puff.global_position = origin_pos + Vector2(randf_range(-16.0, 22.0) * weight_mult, randf_range(-5.0, 5.0))
+		puff.rotation = randf_range(0.0, TAU)
+		puff.scale = Vector2(0.42, 0.35)
+		puff.z_index = -1
+		parent_node.add_child(puff)
+
+		var side_dir := 1.0 if i % 2 == 0 else -1.0
+		var target_pos := puff.global_position + Vector2(side_dir * randf_range(16.0, 38.0) * weight_mult, randf_range(-18.0, -4.0))
+		var tw := puff.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(puff, "global_position", target_pos, randf_range(0.24, 0.38)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(puff, "scale", Vector2(1.45, 1.10), 0.26).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(puff, "modulate:a", 0.0, 0.34).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.chain().tween_callback(puff.queue_free)
+
+
+func _trigger_death_shake(weight_mult: float) -> void:
+	var stage_node := get_parent()
+	if not (stage_node is Node2D):
+		return
+	var stage_2d := stage_node as Node2D
+	if not stage_2d.has_meta("_death_shake_base_pos"):
+		stage_2d.set_meta("_death_shake_base_pos", stage_2d.position)
+	var base_pos: Vector2 = stage_2d.get_meta("_death_shake_base_pos")
+
+	if stage_2d.has_meta("_death_shake_tween"):
+		var prev_tw = stage_2d.get_meta("_death_shake_tween")
+		if prev_tw is Tween and is_instance_valid(prev_tw):
+			(prev_tw as Tween).kill()
+
+	var tw := stage_2d.create_tween()
+	stage_2d.set_meta("_death_shake_tween", tw)
+	if weight_mult > 1.1:
+		var amp := clampf(weight_mult * 3.8, 3.6, 6.0)
+		tw.tween_property(stage_2d, "position", base_pos + Vector2(-2.2, amp), 0.024)
+		tw.tween_property(stage_2d, "position", base_pos + Vector2(2.6, -amp * 0.65), 0.028)
+		tw.tween_property(stage_2d, "position", base_pos + Vector2(-1.4, amp * 0.35), 0.032)
+		tw.tween_property(stage_2d, "position", base_pos, 0.036)
+	else:
+		# Легесенька й дуже коротка труска екрана в момент смерті/падіння ворога
+		tw.tween_property(stage_2d, "position", base_pos + Vector2(-0.9, 1.9), 0.022)
+		tw.tween_property(stage_2d, "position", base_pos + Vector2(0.8, -1.1), 0.024)
+		tw.tween_property(stage_2d, "position", base_pos, 0.028)
+	tw.tween_callback(func() -> void:
+		if is_instance_valid(stage_2d):
+			stage_2d.remove_meta("_death_shake_base_pos")
+			stage_2d.remove_meta("_death_shake_tween")
+	)
 
 
 func _flash_hit() -> void:
@@ -851,7 +1237,7 @@ func _create_hp_bar() -> void:
 	var bar_w := 132.0 if is_boss else HP_BAR_WIDTH
 	var bar_h := 11.0 if is_boss else HP_BAR_HEIGHT
 	_hp_bar_root = Node2D.new()
-	_hp_bar_root.position = Vector2(0.0, -124.0 if is_boss else -70.0)
+	_hp_bar_root.position = Vector2(0.0, -152.0 if use_hammer_sweep else (-124.0 if is_boss else -70.0))
 	_hp_bar_root.z_index = 20
 	_hp_bar_root.visible = is_boss
 	add_child(_hp_bar_root)

@@ -9,6 +9,7 @@ static var current_level: int = 1
 static var coins: int = 0
 static var last_level_earned: int = 0
 static var master_volume: float = 0.8
+static var test_skip_to_boss: bool = false
 
 # Рівні прокачки (від 0 до MAX_UPGRADE_LEVEL = 5)
 static var upg_hp_level: int = 0
@@ -35,8 +36,8 @@ const LEVEL_DATA: Array[Dictionary] = [
 	{"infantry": 26, "shotgun": 9, "heavy": 6, "grenadier": 4, "axe": 9, "snipers": 4, "heli": 1, "heli_troops": 5, "spawn_interval": 1.40, "reward": 195},
 	# Рівень 9: подвійний вертолітний десант + 6 кулеметників + масовані хвилі
 	{"infantry": 28, "shotgun": 10, "heavy": 6, "grenadier": 5, "axe": 10, "snipers": 5, "heli": 2, "heli_troops": 4, "spawn_interval": 1.35, "reward": 220},
-	# Рівень 10: рубіж екватора кампанії, 7 кулеметників
-	{"infantry": 30, "shotgun": 11, "heavy": 7, "grenadier": 5, "axe": 10, "snipers": 5, "heli": 2, "heli_troops": 5, "spawn_interval": 1.30, "reward": 250},
+	# Рівень 10: фінал першої десятки хвиль — Бос-Молотобоєць
+	{"infantry": 30, "shotgun": 11, "heavy": 7, "grenadier": 5, "axe": 10, "snipers": 5, "heli": 2, "heli_troops": 5, "spawn_interval": 1.30, "reward": 400, "has_boss": true, "boss_type": "hammer", "max_boss_minions": 4},
 	# Рівень 11: важка піхота, 7 кулеметників та строї дробовиків
 	{"infantry": 32, "shotgun": 12, "heavy": 7, "grenadier": 6, "axe": 11, "snipers": 5, "heli": 2, "heli_troops": 5, "spawn_interval": 1.25, "reward": 280},
 	# Рівень 12: масований штурм у 4 хвилі, 8 кулеметників
@@ -119,6 +120,8 @@ static func get_kill_reward(unit_type: String) -> int:
 	match unit_type:
 		"boss":
 			base_reward = 250
+		"boss_hammer":
+			base_reward = 350
 		"sniper":
 			base_reward = 25
 		"heavy":
@@ -141,6 +144,45 @@ static func reset_campaign() -> void:
 	upg_hp_level = 0
 	upg_damage_level = 0
 	upg_coins_level = 0
+	test_skip_to_boss = false
+
+
+static func jump_to_test_level_10(skip_to_boss: bool = false) -> void:
+	current_level = 10
+	test_skip_to_boss = skip_to_boss
+	# Надаємо тестове спорядження рівня 10, якщо гравець ще нічого не прокачував
+	if upg_hp_level == 0 and upg_damage_level == 0:
+		upg_hp_level = 3
+		upg_damage_level = 3
+		coins = maxi(coins, 500)
+
+
+static func create_test_button(text_label: String, base_col: Color) -> Button:
+	var btn := Button.new()
+	btn.text = text_label
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	btn.add_theme_font_size_override("font_size", 16)
+	btn.add_theme_color_override("font_color", Color(0.97, 0.94, 0.85, 1.0))
+	btn.add_theme_color_override("font_hover_color", Color(1.0, 0.98, 0.90, 1.0))
+
+	var normal_sb := StyleBoxFlat.new()
+	normal_sb.bg_color = base_col
+	normal_sb.border_color = Color(0.76, 0.64, 0.36, 0.92)
+	normal_sb.set_border_width_all(2)
+	normal_sb.set_corner_radius_all(6)
+
+	var hover_sb := normal_sb.duplicate() as StyleBoxFlat
+	hover_sb.bg_color = base_col.lightened(0.14)
+	hover_sb.border_color = Color(0.95, 0.82, 0.48, 1.0)
+
+	var pressed_sb := normal_sb.duplicate() as StyleBoxFlat
+	pressed_sb.bg_color = base_col.darkened(0.16)
+
+	btn.add_theme_stylebox_override("normal", normal_sb)
+	btn.add_theme_stylebox_override("hover", hover_sb)
+	btn.add_theme_stylebox_override("pressed", pressed_sb)
+	btn.add_theme_stylebox_override("focus", hover_sb)
+	return btn
 
 
 static func set_master_volume(value: float) -> void:

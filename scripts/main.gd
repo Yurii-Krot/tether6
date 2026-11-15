@@ -321,7 +321,7 @@ func _on_player_died() -> void:
 	banner_label.modulate = Color(1.0, 0.42, 0.42, 1.0)
 	banner_label.text = "ПОРАЗКА! Відступаємо у вікно покращень...\n(Зароблено: +$%d)" % _level_earned
 	var wait_tween := create_tween()
-	wait_tween.tween_interval(1.55)
+	wait_tween.tween_interval(2.25)
 	wait_tween.tween_callback(_fade_to_scene.bind(UPGRADE_SCENE_PATH))
 
 

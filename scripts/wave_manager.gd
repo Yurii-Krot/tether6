@@ -17,6 +17,7 @@ signal enemy_killed(unit_type: String, world_pos: Vector2, reward: int)
 @export var grenadier_scene: PackedScene = preload("res://scenes/grenadier.tscn")
 @export var axe_thrower_scene: PackedScene = preload("res://scenes/axe_thrower.tscn")
 @export var boss_grenadier_scene: PackedScene = preload("res://scenes/boss_grenadier.tscn")
+@export var boss_hammer_scene: PackedScene = preload("res://scenes/boss_hammer.tscn")
 @export var sniper_scene: PackedScene = preload("res://scenes/sniper.tscn")
 @export var helicopter_scene: PackedScene = preload("res://scenes/helicopter.tscn")
 @export var spawn_interval := 2.3
@@ -54,8 +55,12 @@ var killed_enemy_soldiers := 0
 var _spawn_queue: Array[String] = []
 var _alive_enemies: Dictionary = {}
 var _rewarded_enemies: Dictionary = {}
+var _pending_formation_spawns := 0
+var _wave_generation := 0
 var _wave_in_progress := false
 var _has_boss_fight := false
+var _boss_type := "grenadier"
+var _max_boss_minions := 3
 var _boss_spawned := false
 var _boss_fight_active := false
 var _boss_instance_id := -1
@@ -98,6 +103,8 @@ func _ready() -> void:
 func start_waves() -> void:
 	current_wave_index = -1
 	_sniper_spawn_idx = 0
+	_wave_generation += 1
+	_pending_formation_spawns = 0
 	_alive_enemies.clear()
 	_rewarded_enemies.clear()
 	_spawn_queue.clear()
@@ -153,7 +160,20 @@ func _start_next_wave() -> void:
 	_boss_spawned = false
 	_boss_fight_active = false
 	_boss_instance_id = -1
-	_has_boss_fight = bool(waves[current_wave_index].get("has_boss", false)) or (GAME_STATE.current_level == 5)
+	_has_boss_fight = bool(waves[current_wave_index].get("has_boss", false)) or (GAME_STATE.current_level == 5) or (GAME_STATE.current_level == 10)
+	_boss_type = str(waves[current_wave_index].get("boss_type", "hammer" if GAME_STATE.current_level == 10 else "grenadier"))
+	_max_boss_minions = int(waves[current_wave_index].get("max_boss_minions", 4 if GAME_STATE.current_level == 10 else 3))
+
+	if GAME_STATE.test_skip_to_boss and _has_boss_fight:
+		GAME_STATE.test_skip_to_boss = false
+		_spawn_queue.clear()
+		total_enemy_soldiers = 1
+		total_level_units = 1
+		wave_started.emit(current_wave_index + 1)
+		subwave_changed.emit(current_subwave, total_subwaves)
+		_start_boss_fight()
+		return
+
 	_spawn_queue = _build_wave_queue(waves[current_wave_index])
 	wave_started.emit(current_wave_index + 1)
 	subwave_changed.emit(current_subwave, total_subwaves)
@@ -358,30 +378,60 @@ func _spawn_five_formation(unit_type: String, is_v_shape: bool) -> void:
 	elif unit_type == "axe":
 		base_stop_x = 460.0
 
-	for i in range(5):
-		var unit := packed.instantiate() as Node2D
-		if unit == null:
-			continue
-
-		var dist_from_center := absf(float(i - 2)) # 0 для центру (i=2), 1 для сусідніх (i=1,3), 2 для крайніх (i=0,4)
-		var x_shift := (dist_from_center * 58.0) if is_v_shape else 0.0
-		var spawn_x := infantry_spawn_x + x_shift
-		var target_stop_x := (base_stop_x - 58.0 + dist_from_center * 58.0) if is_v_shape else base_stop_x
-
-		unit.global_position = Vector2(spawn_x, row_ys[i])
-		if unit.has_method("set_custom_stop_x"):
-			unit.set_custom_stop_x(target_stop_x)
-
-		_register_unit(unit, unit_type)
-		container.add_child(unit)
+	if not is_v_shape:
+		for i in range(5):
+			var unit := packed.instantiate() as Node2D
+			if unit == null:
+				continue
+			unit.global_position = Vector2(infantry_spawn_x, row_ys[i])
+			if unit.has_method("set_custom_stop_x"):
+				unit.set_custom_stop_x(base_stop_x)
+			_register_unit(unit, unit_type)
+			container.add_child(unit)
+	else:
+		# V-формація виходить хвилями: спочатку 1 по середині, через 0.3 с двоє по боках, ще через 0.3 с двоє по краях
+		var spawn_order: Array[int] = [2, 1, 3, 0, 4]
+		var gen := _wave_generation
+		for i in spawn_order:
+			var dist_from_center := absf(float(i - 2)) # 0 для центру (i=2), 1 для боків (i=1,3), 2 для країв (i=0,4)
+			var target_stop_x := base_stop_x - 58.0 + dist_from_center * 58.0
+			var spawn_delay := dist_from_center * 0.3
+			if spawn_delay <= 0.0:
+				_spawn_v_formation_member(packed, unit_type, row_ys[i], target_stop_x, gen, false)
+			else:
+				_pending_formation_spawns += 1
+				var t := get_tree().create_timer(spawn_delay)
+				t.timeout.connect(_spawn_v_formation_member.bind(packed, unit_type, row_ys[i], target_stop_x, gen, true))
 
 	formation_spawned.emit(unit_type, is_v_shape)
+
+
+func _spawn_v_formation_member(packed: PackedScene, unit_type: String, row_y: float, target_stop_x: float, gen: int, count_pending: bool) -> void:
+	if gen != _wave_generation or not is_inside_tree():
+		return
+	if count_pending:
+		_pending_formation_spawns = maxi(_pending_formation_spawns - 1, 0)
+	var container := get_parent() if get_parent() != null else get_tree().current_scene
+	if container == null or packed == null:
+		_check_wave_cleared()
+		return
+	var unit := packed.instantiate() as Node2D
+	if unit == null:
+		_check_wave_cleared()
+		return
+	unit.global_position = Vector2(infantry_spawn_x, row_y)
+	if unit.has_method("set_custom_stop_x"):
+		unit.set_custom_stop_x(target_stop_x)
+	_register_unit(unit, unit_type)
+	container.add_child(unit)
 
 
 func _get_scene_for_type(unit_type: String) -> PackedScene:
 	match unit_type:
 		"boss":
 			return boss_grenadier_scene
+		"boss_hammer":
+			return boss_hammer_scene
 		"sniper":
 			return sniper_scene
 		"heavy":
@@ -399,9 +449,13 @@ func _register_unit(unit: Node2D, unit_type: String = "infantry", count_toward_l
 	if count_toward_level_total:
 		spawned_level_units += 1
 	if unit_type == "boss":
-		# ХП боса розраховано рівно на ~150 пострілів гвинтівки головного героя
+		# ХП боса 5-ї хвилі розраховано рівно на ~150 пострілів гвинтівки головного героя
 		if "health" in unit:
 			unit.health = roundf(150.0 * GAME_STATE.get_player_bullet_damage())
+	elif unit_type == "boss_hammer":
+		# Бос 10-ї хвилі має фіксовані 2000 ХП (без хвильового множника)
+		if "health" in unit:
+			unit.health = 2000.0
 	else:
 		var hp_mult := GAME_STATE.get_enemy_hp_multiplier(maxi(current_wave_index, 0))
 		if "health" in unit:
@@ -485,13 +539,18 @@ func _start_boss_fight() -> void:
 	_boss_fight_active = true
 	boss_fight_started.emit()
 
-	if boss_grenadier_scene != null:
-		var boss := boss_grenadier_scene.instantiate() as Node2D
+	var is_hammer_boss := (_boss_type == "hammer") and (boss_hammer_scene != null)
+	var boss_packed: PackedScene = boss_hammer_scene if is_hammer_boss else boss_grenadier_scene
+	var boss_unit_type := "boss_hammer" if is_hammer_boss else "boss"
+	var spawn_y := 468.0 if is_hammer_boss else 485.0
+
+	if boss_packed != null:
+		var boss := boss_packed.instantiate() as Node2D
 		if boss != null:
-			boss.global_position = Vector2(infantry_spawn_x + 35.0, 485.0)
+			boss.global_position = Vector2(infantry_spawn_x + 35.0, spawn_y)
 			if boss.has_method("set_custom_stop_x"):
 				boss.set_custom_stop_x(915.0)
-			_register_unit(boss, "boss", false)
+			_register_unit(boss, boss_unit_type, false)
 			_boss_instance_id = boss.get_instance_id()
 			var container := get_parent() if get_parent() != null else get_tree().current_scene
 			container.add_child(boss)
@@ -506,12 +565,13 @@ func _on_boss_minion_timer_timeout() -> void:
 			_boss_minion_timer.stop()
 		return
 
-	# Рахуємо скільки звичайних ворогів-помічників зараз на полі (без самого боса). Максимум 3 одночасно!
+	# Рахуємо скільки звичайних ворогів-помічників зараз на полі (без самого боса).
+	var max_minions := maxi(_max_boss_minions, 3)
 	var alive_minions := maxi(_alive_enemies.size() - 1, 0)
-	if alive_minions >= 3:
+	if alive_minions >= max_minions:
 		return
 
-	var available_slots := 3 - alive_minions
+	var available_slots := max_minions - alive_minions
 	var to_spawn := mini(randi_range(1, 2), available_slots)
 	var minion_types: Array[String] = ["infantry", "shotgun", "heavy", "grenadier", "axe", "sniper"]
 	var container := get_parent() if get_parent() != null else get_tree().current_scene
@@ -547,7 +607,7 @@ func _check_wave_cleared() -> void:
 		return
 	if not is_inside_tree() or _spawn_timer == null or not _spawn_timer.is_inside_tree():
 		return
-	if not _spawn_queue.is_empty() or not _alive_enemies.is_empty():
+	if not _spawn_queue.is_empty() or not _alive_enemies.is_empty() or _pending_formation_spawns > 0:
 		return
 
 	if _has_boss_fight and not _boss_spawned:
