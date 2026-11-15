@@ -2,51 +2,57 @@ class_name GameState
 extends RefCounted
 
 const TOTAL_LEVELS := 15
+const BOSS_LEVEL := 10
 const MAX_UPGRADE_LEVEL := 5
 const BASE_UPGRADE_COST := 50
 
 static var current_level: int = 1
 static var coins: int = 0
 static var last_level_earned: int = 0
+static var last_level_coins_earned: int = 0
 static var master_volume: float = 0.8
 static var test_skip_to_boss: bool = false
+static var test_boss_only_mode: bool = false
 
-# Рівні прокачки (від 0 до MAX_UPGRADE_LEVEL = 5)
+## Скін оперативника: "shades_gold" (Окуляри «Золотий Хижак»), "shades_cyber" (Окуляри «Кібер-Неон»), "standard" (Шолом)
+static var hero_skin: String = "shades_gold"
+
+## Візуальний фільтр терміналу: "bunker", "thermal", "nvg", "crt"
+static var visual_filter: String = "bunker"
+
+# Legacy змінні рівнів прокачки (синхронізуються зі словником upgrade_levels)
 static var upg_hp_level: int = 0
 static var upg_damage_level: int = 0
 static var upg_coins_level: int = 0
 
-# Таблиця 15 рівнів із збільшеною кількістю ворогів (на 1 рівні втричі більше, далі пропорційно більше, червоні важкі кулеметники є на кожному рівні)
+static var upgrade_levels: Dictionary = {
+	"hp": 0,
+	"damage": 0,
+	"coins": 0,
+	"fire_rate": 0,
+	"mag": 0,
+	"ammo": 0,
+	"armor": 0,
+	"medkit": 0,
+	"grenade": 0,
+}
+
+# Таблиця 15 рівнів із збільшеною кількістю ворогів
 const LEVEL_DATA: Array[Dictionary] = [
-	# Рівень 1: 12 піхотинців + 2 дробовики + 2 червоні кулеметники + 2 гранатометники + 5 метальників сокири + 2 снайпери = 25 ворогів
 	{"infantry": 12, "shotgun": 2, "heavy": 2, "grenadier": 2, "axe": 5, "snipers": 2, "heli": 0, "heli_troops": 0, "spawn_interval": 1.85, "reward": 60},
-	# Рівень 2: більше піхоти + дробовики + 3 червоні кулеметники + гранатометники + метальники сокири + снайпери
 	{"infantry": 15, "shotgun": 3, "heavy": 3, "grenadier": 2, "axe": 6, "snipers": 2, "heli": 0, "heli_troops": 0, "spawn_interval": 1.75, "reward": 75},
-	# Рівень 3: перший вертоліт з десантом + 3 червоні кулеметники + метальники сокири + стрій піхоти та дробовики
 	{"infantry": 16, "shotgun": 4, "heavy": 3, "grenadier": 2, "axe": 6, "snipers": 3, "heli": 1, "heli_troops": 3, "spawn_interval": 1.68, "reward": 95},
-	# Рівень 4: 4 червоні важкі кулеметники + строї з 5 бійців
 	{"infantry": 18, "shotgun": 5, "heavy": 4, "grenadier": 3, "axe": 7, "snipers": 3, "heli": 0, "heli_troops": 0, "spawn_interval": 1.62, "reward": 110},
-	# Рівень 5: вертоліт + 4 червоні кулеметники + гранатометники + снайпери + БОС В КІНЦІ ХВИЛІ
 	{"infantry": 20, "shotgun": 6, "heavy": 4, "grenadier": 3, "axe": 7, "snipers": 3, "heli": 1, "heli_troops": 4, "has_boss": true, "spawn_interval": 1.56, "reward": 200},
-	# Рівень 6: інтенсивний штурм дробовиків, 5 кулеметників та піхоти у строях V і в лінію
 	{"infantry": 22, "shotgun": 7, "heavy": 5, "grenadier": 4, "axe": 8, "snipers": 4, "heli": 1, "heli_troops": 4, "spawn_interval": 1.50, "reward": 150},
-	# Рівень 7: посилені хвилі з 5 кулеметниками та гранатометниками
 	{"infantry": 24, "shotgun": 8, "heavy": 5, "grenadier": 4, "axe": 8, "snipers": 4, "heli": 1, "heli_troops": 4, "spawn_interval": 1.45, "reward": 170},
-	# Рівень 8: 4 підхвилі, 6 кулеметників, снайпери на пагорбі + десант
 	{"infantry": 26, "shotgun": 9, "heavy": 6, "grenadier": 4, "axe": 9, "snipers": 4, "heli": 1, "heli_troops": 5, "spawn_interval": 1.40, "reward": 195},
-	# Рівень 9: подвійний вертолітний десант + 6 кулеметників + масовані хвилі
 	{"infantry": 28, "shotgun": 10, "heavy": 6, "grenadier": 5, "axe": 10, "snipers": 5, "heli": 2, "heli_troops": 4, "spawn_interval": 1.35, "reward": 220},
-	# Рівень 10: фінал першої десятки хвиль — Бос-Молотобоєць
 	{"infantry": 30, "shotgun": 11, "heavy": 7, "grenadier": 5, "axe": 10, "snipers": 5, "heli": 2, "heli_troops": 5, "spawn_interval": 1.30, "reward": 400, "has_boss": true, "boss_type": "hammer", "max_boss_minions": 4},
-	# Рівень 11: важка піхота, 7 кулеметників та строї дробовиків
 	{"infantry": 32, "shotgun": 12, "heavy": 7, "grenadier": 6, "axe": 11, "snipers": 5, "heli": 2, "heli_troops": 5, "spawn_interval": 1.25, "reward": 280},
-	# Рівень 12: масований штурм у 4 хвилі, 8 кулеметників
 	{"infantry": 34, "shotgun": 13, "heavy": 8, "grenadier": 6, "axe": 11, "snipers": 6, "heli": 2, "heli_troops": 5, "spawn_interval": 1.20, "reward": 310},
-	# Рівень 13: потужний наступ з усіх напрямків, 9 кулеметників
 	{"infantry": 36, "shotgun": 14, "heavy": 9, "grenadier": 7, "axe": 12, "snipers": 6, "heli": 2, "heli_troops": 6, "spawn_interval": 1.15, "reward": 350},
-	# Рівень 14: передостанній рубіж, 3 вертольоти + 10 кулеметників
 	{"infantry": 39, "shotgun": 15, "heavy": 10, "grenadier": 8, "axe": 13, "snipers": 6, "heli": 3, "heli_troops": 5, "spawn_interval": 1.10, "reward": 400},
-	# Рівень 15: фінальна битва, 12 кулеметників
 	{"infantry": 42, "shotgun": 16, "heavy": 12, "grenadier": 9, "axe": 14, "snipers": 6, "heli": 3, "heli_troops": 6, "spawn_interval": 1.05, "reward": 500},
 ]
 
@@ -57,40 +63,47 @@ static func get_current_level_data() -> Dictionary:
 
 
 static func get_enemy_hp_multiplier(wave_index: int = 0) -> float:
-	# На кожній новій хвилі/рівні додається +10% від БАЗОВОГО (початкового) ХП ворога
 	var step := maxi(current_level - 1, 0) + maxi(wave_index, 0)
 	return 1.0 + 0.10 * float(step)
 
 
-static func get_player_max_health() -> float:
-	return 100.0 + float(upg_hp_level) * 25.0
-
-
-static func get_player_bullet_damage() -> float:
-	return 10.0 + float(upg_damage_level) * 3.0
-
-
-static func get_coin_multiplier() -> float:
-	return 1.0 + float(upg_coins_level) * 0.20
+static func get_enemy_health_multiplier_for_level(level: int = current_level) -> float:
+	var step := maxi(level - 1, 0)
+	return 1.0 + 0.10 * float(step)
 
 
 static func get_upgrade_level(upg_key: String) -> int:
+	return int(upgrade_levels.get(upg_key, 0))
+
+
+static func _set_upgrade_level(upg_key: String, val: int) -> void:
+	upgrade_levels[upg_key] = val
 	match upg_key:
 		"hp":
-			return upg_hp_level
+			upg_hp_level = val
 		"damage":
-			return upg_damage_level
+			upg_damage_level = val
 		"coins":
-			return upg_coins_level
-	return 0
+			upg_coins_level = val
+
+
+static func can_upgrade(upg_key: String) -> bool:
+	return get_upgrade_level(upg_key) < MAX_UPGRADE_LEVEL
 
 
 static func get_upgrade_cost(upg_key: String) -> int:
 	var lvl := get_upgrade_level(upg_key)
 	if lvl >= MAX_UPGRADE_LEVEL:
 		return 0
-	# Кожен наступний апгрейд у 2 рази дорожчий за попередній: 50, 100, 200, 400, 800
-	return BASE_UPGRADE_COST * (1 << lvl)
+	var base_cost := BASE_UPGRADE_COST
+	match upg_key:
+		"fire_rate", "armor":
+			base_cost = 55
+		"ammo", "grenade":
+			base_cost = 60
+		"mag", "medkit":
+			base_cost = 45
+	return base_cost * (1 << lvl)
 
 
 static func can_buy_upgrade(upg_key: String) -> bool:
@@ -105,14 +118,78 @@ static func buy_upgrade(upg_key: String) -> bool:
 		return false
 	var cost := get_upgrade_cost(upg_key)
 	coins -= cost
-	match upg_key:
-		"hp":
-			upg_hp_level += 1
-		"damage":
-			upg_damage_level += 1
-		"coins":
-			upg_coins_level += 1
+	_set_upgrade_level(upg_key, get_upgrade_level(upg_key) + 1)
 	return true
+
+
+static func try_buy_upgrade(upg_key: String) -> bool:
+	return buy_upgrade(upg_key)
+
+
+static func add_coins(amount: int) -> void:
+	var gained := maxi(0, amount)
+	coins += gained
+	last_level_earned += gained
+	last_level_coins_earned = last_level_earned
+
+
+static func start_level_run() -> void:
+	last_level_earned = 0
+	last_level_coins_earned = 0
+
+
+# ── Бойові характеристики гравця з урахуванням прокачки ─────────────────────
+
+static func get_player_max_health() -> float:
+	return 100.0 + float(get_upgrade_level("hp")) * 25.0
+
+
+static func get_player_bullet_damage() -> float:
+	return 10.0 + float(get_upgrade_level("damage")) * 3.0
+
+
+static func get_player_fire_rate() -> float:
+	return 10.0 + float(get_upgrade_level("fire_rate")) * 1.2
+
+
+static func get_player_magazine_size() -> int:
+	return 30 + get_upgrade_level("mag") * 5
+
+
+static func get_player_reload_time() -> float:
+	return maxf(1.5, 3.5 - float(get_upgrade_level("mag")) * 0.30)
+
+
+static func get_player_bullet_speed() -> float:
+	return 1380.0 + float(get_upgrade_level("ammo")) * 130.0
+
+
+static func get_player_crit_chance() -> float:
+	return float(get_upgrade_level("ammo")) * 0.08
+
+
+static func get_player_damage_reduction() -> float:
+	return float(get_upgrade_level("armor")) * 0.06
+
+
+static func get_player_roll_cooldown() -> float:
+	return maxf(0.04, 0.07 - float(get_upgrade_level("armor")) * 0.006)
+
+
+static func get_player_medkit_cooldown() -> float:
+	return maxf(18.0, 40.0 - float(get_upgrade_level("medkit")) * 4.0)
+
+
+static func get_player_grenade_damage() -> float:
+	return 140.0 + float(get_upgrade_level("grenade")) * 28.0
+
+
+static func get_player_grenade_cooldown() -> float:
+	return maxf(15.0, 30.0 - float(get_upgrade_level("grenade")) * 3.0)
+
+
+static func get_coin_multiplier() -> float:
+	return 1.0 + float(get_upgrade_level("coins")) * 0.20
 
 
 static func get_kill_reward(unit_type: String) -> int:
@@ -141,19 +218,23 @@ static func reset_campaign() -> void:
 	current_level = 1
 	coins = 0
 	last_level_earned = 0
+	last_level_coins_earned = 0
 	upg_hp_level = 0
 	upg_damage_level = 0
 	upg_coins_level = 0
+	for k in upgrade_levels.keys():
+		upgrade_levels[k] = 0
 	test_skip_to_boss = false
+	test_boss_only_mode = false
 
 
 static func jump_to_test_level_10(skip_to_boss: bool = false) -> void:
 	current_level = 10
 	test_skip_to_boss = skip_to_boss
-	# Надаємо тестове спорядження рівня 10, якщо гравець ще нічого не прокачував
-	if upg_hp_level == 0 and upg_damage_level == 0:
-		upg_hp_level = 3
-		upg_damage_level = 3
+	test_boss_only_mode = skip_to_boss
+	if get_upgrade_level("hp") == 0 and get_upgrade_level("damage") == 0:
+		_set_upgrade_level("hp", 3)
+		_set_upgrade_level("damage", 3)
 		coins = maxi(coins, 500)
 
 

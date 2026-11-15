@@ -13,6 +13,10 @@ const ICON_MEDKIT := preload("res://assets/icon_medkit.png")
 const GRENADE_SCRIPT := preload("res://scripts/grenade.gd")
 const GAME_STATE := preload("res://scripts/game_state.gd")
 const DEATH_SHEET_TEX := preload("res://assets/player_death_sheet.png")
+const SKIN_SHEET_STANDARD := preload("res://assets/player_spritesheet.png")
+const SKIN_SHEET_GOLD := preload("res://assets/player_spritesheet_shades_gold.png")
+const SKIN_SHEET_CYBER := preload("res://assets/player_spritesheet_shades_cyber.png")
+const SKIN_SHEET_BLACK := preload("res://assets/player_spritesheet_shades_black.png")
 const DEATH_THUD_SOUND := preload("res://assets/grenade_explosion.wav")
 const BASE_SPRITE_SCALE := Vector2(0.64, 0.64)
 const SHOULDER_OFFSET_STAND := Vector2(-11.5, -7.5)
@@ -85,6 +89,8 @@ const DEATH_FRAME_TIMES: Array[float] = [
 
 var ammo := 30
 var health := 100.0
+var crit_chance := 0.0
+var damage_reduction := 0.0
 var cooldown := 0.0
 # У стані спокою боєць за замовчуванням захований в окопі (не отримує урон)
 var is_in_cover := true
@@ -121,19 +127,27 @@ var _heal_applied := false
 var _death_anim_elapsed := 0.0
 var _death_dust_spawned := false
 
-# Візуальні бари ХП (червоний) та Патронів (синій) у лівому нижньому куті екрана
-const BAR_MAX_WIDTH := 280.0
-const BAR_HEIGHT := 24.0
+# Візуальні бари ХП та Патронів у лівому нижньому куті екрана (Тактична консоль)
+const BAR_MAX_WIDTH := 308.0
+const BAR_HEIGHT := 26.0
 var _hud_layer: CanvasLayer = null
 var _hp_bar_trail: ColorRect = null
 var _hp_bar_main: ColorRect = null
+var _hp_bar_shine: ColorRect = null
 var _hp_bar_label: Label = null
+var _hp_armor_label: Label = null
 var _ammo_bar_trail: ColorRect = null
 var _ammo_bar_main: ColorRect = null
+var _ammo_bar_shine: ColorRect = null
 var _ammo_bar_edge: ColorRect = null
 var _ammo_bar_label: Label = null
+var _ammo_state_label: Label = null
+var _grenade_slot_panel: Panel = null
+var _grenade_cd_fill: ColorRect = null
 var _grenade_icon_rect: TextureRect = null
 var _grenade_hud_label: Label = null
+var _medkit_slot_panel: Panel = null
+var _medkit_cd_fill: ColorRect = null
 var _medkit_icon_rect: TextureRect = null
 var _medkit_hud_label: Label = null
 var _hp_trail_ratio := 1.0
@@ -163,8 +177,28 @@ func _ready() -> void:
 	add_to_group("player")
 	_ensure_input_actions()
 
-	max_health = GAME_STATE.get_player_max_health()
-	damage = GAME_STATE.get_player_bullet_damage()
+	max_health = float(GAME_STATE.get_player_max_health())
+	damage = float(GAME_STATE.get_player_bullet_damage())
+	fire_rate = GAME_STATE.get_player_fire_rate()
+	magazine_size = GAME_STATE.get_player_magazine_size()
+	reload_time = GAME_STATE.get_player_reload_time()
+	bullet_speed = GAME_STATE.get_player_bullet_speed()
+	crit_chance = GAME_STATE.get_player_crit_chance()
+	damage_reduction = GAME_STATE.get_player_damage_reduction()
+	heal_cooldown = GAME_STATE.get_player_medkit_cooldown()
+	grenade_damage = float(GAME_STATE.get_player_grenade_damage())
+	grenade_cooldown = GAME_STATE.get_player_grenade_cooldown()
+
+	if body != null:
+		match GAME_STATE.hero_skin:
+			"shades_gold":
+				body.texture = SKIN_SHEET_GOLD
+			"shades_cyber":
+				body.texture = SKIN_SHEET_CYBER
+			"shades_black":
+				body.texture = SKIN_SHEET_BLACK
+			_:
+				body.texture = SKIN_SHEET_STANDARD
 
 	ammo = magazine_size
 	health = max_health
@@ -375,12 +409,15 @@ func shoot(aim: Vector2) -> void:
 
 	var parent_node := get_parent()
 	if parent_node != null:
+		var shot_damage := damage
+		if crit_chance > 0.0 and randf() < crit_chance:
+			shot_damage = roundf(damage * 1.75)
 		var proj := Projectile.new()
 		proj.setup(
 			Projectile.BulletType.PLAYER_YELLOW,
 			origin,
 			target_pos,
-			damage,
+			shot_damage,
 			bullet_speed,
 			false
 		)
@@ -396,7 +433,8 @@ func take_damage(amount: float, ignore_cover: bool = false) -> void:
 	if is_in_cover and not ignore_cover:
 		return
 
-	health = maxf(health - amount, 0.0)
+	var mitigated_amount := maxf(1.0, amount * (1.0 - clampf(damage_reduction, 0.0, 0.65)))
+	health = maxf(health - mitigated_amount, 0.0)
 	_hp_trail_hold_timer = 0.30
 	health_changed.emit(health, max_health)
 	_update_hud()
@@ -1022,150 +1060,239 @@ func _create_bottom_left_bars() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hud_layer.add_child(root)
 
-	# Підкладка внизу зліва екрана (1280x720)
-	var panel := ColorRect.new()
-	panel.position = Vector2(18.0, 592.0)
-	panel.size = Vector2(304.0, 112.0)
-	panel.color = Color(0.06, 0.07, 0.08, 0.78)
+	# Броньований корпус тактичної консолі внизу зліва (у латунно-сталевій гамі Tether6)
+	var panel := _TacticalHudChassis.new()
+	panel.position = Vector2(14.0, 576.0)
+	panel.size = Vector2(332.0, 130.0)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(panel)
 
-	var border_top := ColorRect.new()
-	border_top.position = Vector2(0.0, 0.0)
-	border_top.size = Vector2(304.0, 2.0)
-	border_top.color = Color(0.55, 0.48, 0.34, 0.85)
-	border_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(border_top)
+	# ── ВЕРХНІЙ РЯДОК: СЛОТ ГРАНАТИ [1] ТА СЛОТ АПТЕЧКИ [2] ──
+	_grenade_slot_panel = Panel.new()
+	_grenade_slot_panel.position = Vector2(12.0, 10.0)
+	_grenade_slot_panel.size = Vector2(150.0, 38.0)
+	_grenade_slot_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(_grenade_slot_panel)
 
-	# Верхній рядок з іконками гранати та хілки
+	_grenade_cd_fill = ColorRect.new()
+	_grenade_cd_fill.position = Vector2(2.0, 32.0)
+	_grenade_cd_fill.size = Vector2(146.0, 4.0)
+	_grenade_cd_fill.color = Color(0.95, 0.58, 0.22, 0.90)
+	_grenade_cd_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_grenade_slot_panel.add_child(_grenade_cd_fill)
+
+	var gren_icon_well := ColorRect.new()
+	gren_icon_well.position = Vector2(5.0, 4.0)
+	gren_icon_well.size = Vector2(28.0, 28.0)
+	gren_icon_well.color = Color(0.05, 0.06, 0.08, 0.92)
+	gren_icon_well.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_grenade_slot_panel.add_child(gren_icon_well)
+
 	_grenade_icon_rect = TextureRect.new()
-	_grenade_icon_rect.position = Vector2(12.0, 6.0)
+	_grenade_icon_rect.position = Vector2(6.0, 5.0)
 	_grenade_icon_rect.size = Vector2(26.0, 26.0)
 	_grenade_icon_rect.texture = ICON_GRENADE
 	_grenade_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_grenade_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_grenade_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(_grenade_icon_rect)
+	_grenade_slot_panel.add_child(_grenade_icon_rect)
 
 	_grenade_hud_label = Label.new()
-	_grenade_hud_label.position = Vector2(42.0, 7.0)
-	_grenade_hud_label.size = Vector2(102.0, 24.0)
+	_grenade_hud_label.position = Vector2(38.0, 4.0)
+	_grenade_hud_label.size = Vector2(108.0, 28.0)
 	_grenade_hud_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_grenade_hud_label.add_theme_font_size_override("font_size", 14)
-	_grenade_hud_label.add_theme_color_override("font_color", Color(0.94, 0.90, 0.78, 1.0))
+	_grenade_hud_label.add_theme_font_size_override("font_size", 13)
+	_grenade_hud_label.add_theme_color_override("font_color", Color(0.95, 0.91, 0.80, 1.0))
 	_grenade_hud_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
 	_grenade_hud_label.add_theme_constant_override("outline_size", 4)
-	panel.add_child(_grenade_hud_label)
+	_grenade_slot_panel.add_child(_grenade_hud_label)
+
+	# Слот Аптечки [2]
+	_medkit_slot_panel = Panel.new()
+	_medkit_slot_panel.position = Vector2(170.0, 10.0)
+	_medkit_slot_panel.size = Vector2(150.0, 38.0)
+	_medkit_slot_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(_medkit_slot_panel)
+
+	_medkit_cd_fill = ColorRect.new()
+	_medkit_cd_fill.position = Vector2(2.0, 32.0)
+	_medkit_cd_fill.size = Vector2(146.0, 4.0)
+	_medkit_cd_fill.color = Color(0.35, 0.92, 0.56, 0.90)
+	_medkit_cd_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_medkit_slot_panel.add_child(_medkit_cd_fill)
+
+	var med_icon_well := ColorRect.new()
+	med_icon_well.position = Vector2(5.0, 4.0)
+	med_icon_well.size = Vector2(28.0, 28.0)
+	med_icon_well.color = Color(0.05, 0.06, 0.08, 0.92)
+	med_icon_well.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_medkit_slot_panel.add_child(med_icon_well)
 
 	_medkit_icon_rect = TextureRect.new()
-	_medkit_icon_rect.position = Vector2(150.0, 6.0)
+	_medkit_icon_rect.position = Vector2(6.0, 5.0)
 	_medkit_icon_rect.size = Vector2(26.0, 26.0)
 	_medkit_icon_rect.texture = ICON_MEDKIT
 	_medkit_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_medkit_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_medkit_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(_medkit_icon_rect)
+	_medkit_slot_panel.add_child(_medkit_icon_rect)
 
 	_medkit_hud_label = Label.new()
-	_medkit_hud_label.position = Vector2(180.0, 7.0)
-	_medkit_hud_label.size = Vector2(114.0, 24.0)
+	_medkit_hud_label.position = Vector2(38.0, 4.0)
+	_medkit_hud_label.size = Vector2(108.0, 28.0)
 	_medkit_hud_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_medkit_hud_label.add_theme_font_size_override("font_size", 14)
-	_medkit_hud_label.add_theme_color_override("font_color", Color(0.94, 0.90, 0.78, 1.0))
+	_medkit_hud_label.add_theme_font_size_override("font_size", 13)
+	_medkit_hud_label.add_theme_color_override("font_color", Color(0.95, 0.91, 0.80, 1.0))
 	_medkit_hud_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
 	_medkit_hud_label.add_theme_constant_override("outline_size", 4)
-	panel.add_child(_medkit_hud_label)
+	_medkit_slot_panel.add_child(_medkit_hud_label)
 
-	# 1) ЧЕРВОНИЙ БАР ХП (HP)
+	# ── 1) БАР ЗДОРОВ'Я (РУБІНОВО-ГРАНАТОВИЙ ІЗ ЛАТУННОЮ РАМКОЮ ТА ПОДІЛКАМИ) ──
 	var hp_frame := ColorRect.new()
-	hp_frame.position = Vector2(10.0, 38.0)
+	hp_frame.position = Vector2(10.0, 54.0)
 	hp_frame.size = Vector2(BAR_MAX_WIDTH + 4.0, BAR_HEIGHT + 4.0)
-	hp_frame.color = Color(0.02, 0.02, 0.03, 0.96)
+	hp_frame.color = Color(0.58, 0.48, 0.30, 0.95)
 	hp_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(hp_frame)
 
 	var hp_bg := ColorRect.new()
 	hp_bg.position = Vector2(2.0, 2.0)
 	hp_bg.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
-	hp_bg.color = Color(0.20, 0.06, 0.06, 0.95)
+	hp_bg.color = Color(0.14, 0.05, 0.06, 0.98)
 	hp_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hp_frame.add_child(hp_bg)
 
-	# Слід просідання ХП (світло-помаранчевий/білий шлейф, що плавно доганяє червоний бар після поранення)
 	_hp_bar_trail = ColorRect.new()
 	_hp_bar_trail.position = Vector2(2.0, 2.0)
 	_hp_bar_trail.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
-	_hp_bar_trail.color = Color(1.0, 0.68, 0.36, 0.92)
+	_hp_bar_trail.color = Color(0.98, 0.66, 0.32, 0.92)
 	_hp_bar_trail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hp_frame.add_child(_hp_bar_trail)
 
-	# Основний червоний бар ХП
 	_hp_bar_main = ColorRect.new()
 	_hp_bar_main.position = Vector2(2.0, 2.0)
 	_hp_bar_main.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
-	_hp_bar_main.color = Color(0.86, 0.16, 0.18, 1.0)
+	_hp_bar_main.color = Color(0.78, 0.17, 0.18, 1.0)
 	_hp_bar_main.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hp_frame.add_child(_hp_bar_main)
 
+	_hp_bar_shine = ColorRect.new()
+	_hp_bar_shine.position = Vector2(2.0, 2.0)
+	_hp_bar_shine.size = Vector2(BAR_MAX_WIDTH, 8.0)
+	_hp_bar_shine.color = Color(1.0, 0.68, 0.62, 0.24)
+	_hp_bar_shine.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_frame.add_child(_hp_bar_shine)
+
+	var hp_ticks := _HudBarTicks.new()
+	hp_ticks.position = Vector2(2.0, 2.0)
+	hp_ticks.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
+	hp_ticks.segments = 10
+	hp_ticks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_frame.add_child(hp_ticks)
+
 	_hp_bar_label = Label.new()
-	_hp_bar_label.position = Vector2(10.0, 2.0)
+	_hp_bar_label.position = Vector2(10.0, 1.0)
 	_hp_bar_label.size = Vector2(BAR_MAX_WIDTH - 16.0, BAR_HEIGHT)
 	_hp_bar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_hp_bar_label.add_theme_font_size_override("font_size", 14)
-	_hp_bar_label.add_theme_color_override("font_color", Color(1.0, 0.97, 0.95, 1.0))
+	_hp_bar_label.add_theme_color_override("font_color", Color(1.0, 0.96, 0.90, 1.0))
 	_hp_bar_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
 	_hp_bar_label.add_theme_constant_override("outline_size", 4)
 	hp_frame.add_child(_hp_bar_label)
 
-	# 2) СИНІЙ БАР ПАТРОНІВ (AMMO)
+	_hp_armor_label = Label.new()
+	_hp_armor_label.position = Vector2(10.0, 1.0)
+	_hp_armor_label.size = Vector2(BAR_MAX_WIDTH - 18.0, BAR_HEIGHT)
+	_hp_armor_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_hp_armor_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_hp_armor_label.add_theme_font_size_override("font_size", 12)
+	_hp_armor_label.add_theme_color_override("font_color", Color(0.96, 0.86, 0.56, 0.96))
+	_hp_armor_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
+	_hp_armor_label.add_theme_constant_override("outline_size", 4)
+	hp_frame.add_child(_hp_armor_label)
+
+	# ── 2) БАР ПАТРОНІВ (ТАКТИЧНО-ЛАТУННИЙ / БУРШТИНОВИЙ ІЗ СЕГМЕНТАМИ) ──
 	var ammo_frame := ColorRect.new()
-	ammo_frame.position = Vector2(10.0, 72.0)
+	ammo_frame.position = Vector2(10.0, 90.0)
 	ammo_frame.size = Vector2(BAR_MAX_WIDTH + 4.0, BAR_HEIGHT + 4.0)
-	ammo_frame.color = Color(0.02, 0.02, 0.03, 0.96)
+	ammo_frame.color = Color(0.58, 0.48, 0.30, 0.95)
 	ammo_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(ammo_frame)
 
 	var ammo_bg := ColorRect.new()
 	ammo_bg.position = Vector2(2.0, 2.0)
 	ammo_bg.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
-	ammo_bg.color = Color(0.05, 0.12, 0.22, 0.95)
+	ammo_bg.color = Color(0.08, 0.09, 0.11, 0.98)
 	ammo_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ammo_frame.add_child(ammo_bg)
 
-	# Слід витрати патронів під час черги (блакитний шлейф просідання)
 	_ammo_bar_trail = ColorRect.new()
 	_ammo_bar_trail.position = Vector2(2.0, 2.0)
 	_ammo_bar_trail.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
-	_ammo_bar_trail.color = Color(0.58, 0.88, 1.0, 0.85)
+	_ammo_bar_trail.color = Color(0.98, 0.88, 0.54, 0.80)
 	_ammo_bar_trail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ammo_frame.add_child(_ammo_bar_trail)
 
-	# Основний синій бар патронів (плавно росте при відновленні в окопі)
 	_ammo_bar_main = ColorRect.new()
 	_ammo_bar_main.position = Vector2(2.0, 2.0)
 	_ammo_bar_main.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
-	_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0)
+	_ammo_bar_main.color = Color(0.76, 0.58, 0.22, 1.0)
 	_ammo_bar_main.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ammo_frame.add_child(_ammo_bar_main)
 
-	# Яскравий індикатор на краю синього бара під час відновлення патронів
+	_ammo_bar_shine = ColorRect.new()
+	_ammo_bar_shine.position = Vector2(2.0, 2.0)
+	_ammo_bar_shine.size = Vector2(BAR_MAX_WIDTH, 8.0)
+	_ammo_bar_shine.color = Color(1.0, 0.94, 0.72, 0.24)
+	_ammo_bar_shine.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ammo_frame.add_child(_ammo_bar_shine)
+
+	var ammo_ticks := _HudBarTicks.new()
+	ammo_ticks.position = Vector2(2.0, 2.0)
+	ammo_ticks.size = Vector2(BAR_MAX_WIDTH, BAR_HEIGHT)
+	ammo_ticks.segments = 15
+	ammo_ticks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ammo_frame.add_child(ammo_ticks)
+
 	_ammo_bar_edge = ColorRect.new()
 	_ammo_bar_edge.position = Vector2(2.0, 2.0)
 	_ammo_bar_edge.size = Vector2(4.0, BAR_HEIGHT)
-	_ammo_bar_edge.color = Color(0.75, 0.96, 1.0, 0.95)
+	_ammo_bar_edge.color = Color(1.0, 0.96, 0.75, 0.98)
 	_ammo_bar_edge.visible = false
 	_ammo_bar_edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ammo_frame.add_child(_ammo_bar_edge)
 
 	_ammo_bar_label = Label.new()
-	_ammo_bar_label.position = Vector2(10.0, 2.0)
+	_ammo_bar_label.position = Vector2(10.0, 1.0)
 	_ammo_bar_label.size = Vector2(BAR_MAX_WIDTH - 16.0, BAR_HEIGHT)
 	_ammo_bar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_ammo_bar_label.add_theme_font_size_override("font_size", 14)
-	_ammo_bar_label.add_theme_color_override("font_color", Color(0.95, 0.98, 1.0, 1.0))
+	_ammo_bar_label.add_theme_color_override("font_color", Color(1.0, 0.97, 0.88, 1.0))
 	_ammo_bar_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
 	_ammo_bar_label.add_theme_constant_override("outline_size", 4)
 	ammo_frame.add_child(_ammo_bar_label)
+
+	_ammo_state_label = Label.new()
+	_ammo_state_label.position = Vector2(10.0, 1.0)
+	_ammo_state_label.size = Vector2(BAR_MAX_WIDTH - 18.0, BAR_HEIGHT)
+	_ammo_state_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_ammo_state_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_ammo_state_label.add_theme_font_size_override("font_size", 12)
+	_ammo_state_label.add_theme_color_override("font_color", Color(0.95, 0.90, 0.74, 0.95))
+	_ammo_state_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
+	_ammo_state_label.add_theme_constant_override("outline_size", 4)
+	ammo_frame.add_child(_ammo_state_label)
+
+
+func _style_hud_slot(slot: Panel, ready_state: bool, ready_border: Color) -> void:
+	if slot == null:
+		return
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.11, 0.13, 0.15, 0.96) if ready_state else Color(0.08, 0.09, 0.11, 0.92)
+	sb.border_color = ready_border if ready_state else Color(0.38, 0.34, 0.25, 0.80)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(5)
+	slot.add_theme_stylebox_override("panel", sb)
 
 
 func _update_hud_bars(delta: float) -> void:
@@ -1196,10 +1323,17 @@ func _update_hud_bars(delta: float) -> void:
 
 	if _hp_bar_main:
 		_hp_bar_main.size.x = BAR_MAX_WIDTH * hp_ratio
+	if _hp_bar_shine:
+		_hp_bar_shine.size.x = BAR_MAX_WIDTH * hp_ratio
 	if _hp_bar_trail:
 		_hp_bar_trail.size.x = BAR_MAX_WIDTH * _hp_trail_ratio
 	if _hp_bar_label:
-		_hp_bar_label.text = "ХП: %d / %d" % [int(ceilf(health)), int(roundf(max_health))]
+		_hp_bar_label.text = "♥ ХП: %d / %d" % [int(ceilf(health)), int(roundf(max_health))]
+	if _hp_armor_label:
+		var arm_pct := int(roundf(damage_reduction * 100.0))
+		_hp_armor_label.text = ("БРОНЯ -%d%%" % arm_pct) if arm_pct > 0 else (
+			"УКРИТТЯ" if is_in_cover else "ВОГОНЬ"
+		)
 
 	var is_slow_reload := is_reloading_now and _is_slow_reloading()
 	if _ammo_bar_main:
@@ -1207,43 +1341,67 @@ func _update_hud_bars(delta: float) -> void:
 		if is_reloading_now:
 			var pulse := 0.5 + 0.5 * sin(_anim_time * 10.0)
 			if is_slow_reload:
-				_ammo_bar_main.color = Color(0.90, 0.45, 0.14, 1.0).lerp(Color(1.0, 0.68, 0.24, 1.0), pulse * 0.55)
+				_ammo_bar_main.color = Color(0.84, 0.42, 0.14, 1.0).lerp(Color(0.98, 0.64, 0.22, 1.0), pulse * 0.55)
 			else:
-				_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0).lerp(Color(0.28, 0.72, 1.0, 1.0), pulse * 0.6)
+				_ammo_bar_main.color = Color(0.68, 0.54, 0.20, 1.0).lerp(Color(0.94, 0.78, 0.34, 1.0), pulse * 0.6)
 		else:
-			_ammo_bar_main.color = Color(0.14, 0.52, 0.96, 1.0)
+			_ammo_bar_main.color = Color(0.76, 0.58, 0.22, 1.0)
+	if _ammo_bar_shine:
+		_ammo_bar_shine.size.x = BAR_MAX_WIDTH * ammo_ratio
 	if _ammo_bar_trail:
 		_ammo_bar_trail.size.x = BAR_MAX_WIDTH * _ammo_trail_ratio
 	if _ammo_bar_edge:
 		_ammo_bar_edge.visible = is_reloading_now and ammo_ratio > 0.01 and ammo_ratio < 0.995
 		_ammo_bar_edge.position.x = 2.0 + maxf(BAR_MAX_WIDTH * ammo_ratio - 3.0, 0.0)
 	if _ammo_bar_label:
+		_ammo_bar_label.text = "▮ НАБОЇ: %d / %d" % [ammo, magazine_size]
+	if _ammo_state_label:
 		if is_slow_reload:
-			_ammo_bar_label.text = "ПАТРОНИ: %d / %d  (повільне відновлення...)" % [ammo, magazine_size]
+			_ammo_state_label.text = "ПОВІЛЬНО..."
+			_ammo_state_label.add_theme_color_override("font_color", Color(1.0, 0.66, 0.32, 0.98))
 		elif is_reloading_now:
-			_ammo_bar_label.text = "ПАТРОНИ: %d / %d  (відновлення...)" % [ammo, magazine_size]
+			_ammo_state_label.text = "ЗАРЯДЖАННЯ..."
+			_ammo_state_label.add_theme_color_override("font_color", Color(0.98, 0.88, 0.48, 0.98))
+		elif ammo == 0:
+			_ammo_state_label.text = "ПОРОЖНЬО!"
+			_ammo_state_label.add_theme_color_override("font_color", Color(1.0, 0.42, 0.36, 0.98))
 		else:
-			_ammo_bar_label.text = "ПАТРОНИ: %d / %d" % [ammo, magazine_size]
+			_ammo_state_label.text = "БОЄГОТОВИЙ"
+			_ammo_state_label.add_theme_color_override("font_color", Color(0.78, 0.86, 0.76, 0.88))
 
+	# Оновлення капсули Гранати [1]
+	var gren_ready := _grenade_cooldown_timer <= 0.0
+	_style_hud_slot(_grenade_slot_panel, gren_ready, Color(0.88, 0.68, 0.32, 0.96))
+	if _grenade_cd_fill:
+		var g_prog := 1.0 if gren_ready else clampf(1.0 - (_grenade_cooldown_timer / maxf(grenade_cooldown, 0.1)), 0.0, 1.0)
+		_grenade_cd_fill.size.x = 146.0 * g_prog
+		_grenade_cd_fill.color = Color(0.94, 0.76, 0.32, 0.95) if gren_ready else Color(0.86, 0.48, 0.20, 0.85)
 	if _grenade_hud_label:
-		if _grenade_cooldown_timer <= 0.0:
-			_grenade_hud_label.text = "ГОТОВА [1]"
-			_grenade_hud_label.add_theme_color_override("font_color", Color(0.75, 0.98, 0.72, 1.0))
+		if gren_ready:
+			_grenade_hud_label.text = "ГРАНАТА [1]"
+			_grenade_hud_label.add_theme_color_override("font_color", Color(0.98, 0.92, 0.72, 1.0))
 		else:
-			_grenade_hud_label.text = "%dс  [1]" % int(ceilf(_grenade_cooldown_timer))
-			_grenade_hud_label.add_theme_color_override("font_color", Color(0.78, 0.76, 0.70, 0.9))
+			_grenade_hud_label.text = "КД: %dс  [1]" % int(ceilf(_grenade_cooldown_timer))
+			_grenade_hud_label.add_theme_color_override("font_color", Color(0.78, 0.72, 0.62, 0.9))
 	if _grenade_icon_rect:
-		_grenade_icon_rect.modulate = Color.WHITE if _grenade_cooldown_timer <= 0.0 else Color(0.55, 0.55, 0.55, 0.75)
+		_grenade_icon_rect.modulate = Color.WHITE if gren_ready else Color(0.55, 0.55, 0.55, 0.75)
 
+	# Оновлення капсули Аптечки [2]
+	var med_ready := _heal_cooldown_timer <= 0.0
+	_style_hud_slot(_medkit_slot_panel, med_ready, Color(0.46, 0.84, 0.54, 0.96))
+	if _medkit_cd_fill:
+		var m_prog := 1.0 if med_ready else clampf(1.0 - (_heal_cooldown_timer / maxf(heal_cooldown, 0.1)), 0.0, 1.0)
+		_medkit_cd_fill.size.x = 146.0 * m_prog
+		_medkit_cd_fill.color = Color(0.42, 0.90, 0.56, 0.95) if med_ready else Color(0.32, 0.65, 0.42, 0.82)
 	if _medkit_hud_label:
-		if _heal_cooldown_timer <= 0.0:
-			_medkit_hud_label.text = "ГОТОВА [2]"
-			_medkit_hud_label.add_theme_color_override("font_color", Color(0.75, 0.98, 0.72, 1.0))
+		if med_ready:
+			_medkit_hud_label.text = "АПТЕЧКА [2]"
+			_medkit_hud_label.add_theme_color_override("font_color", Color(0.76, 0.98, 0.80, 1.0))
 		else:
-			_medkit_hud_label.text = "%dс  [2]" % int(ceilf(_heal_cooldown_timer))
-			_medkit_hud_label.add_theme_color_override("font_color", Color(0.78, 0.76, 0.70, 0.9))
+			_medkit_hud_label.text = "КД: %dс  [2]" % int(ceilf(_heal_cooldown_timer))
+			_medkit_hud_label.add_theme_color_override("font_color", Color(0.74, 0.78, 0.74, 0.9))
 	if _medkit_icon_rect:
-		_medkit_icon_rect.modulate = Color.WHITE if _heal_cooldown_timer <= 0.0 else Color(0.55, 0.55, 0.55, 0.75)
+		_medkit_icon_rect.modulate = Color.WHITE if med_ready else Color(0.55, 0.55, 0.55, 0.75)
 
 
 func _update_hud() -> void:
@@ -1285,3 +1443,47 @@ func _ensure_input_actions() -> void:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = key
 			InputMap.action_add_event("roll_down", ev)
+
+
+class _TacticalHudChassis extends Control:
+	func _draw() -> void:
+		var r := Rect2(Vector2.ZERO, size)
+		# Тінь під панеллю
+		draw_rect(Rect2(Vector2(3.0, 4.0), size), Color(0.0, 0.0, 0.0, 0.55), true)
+		# Основна темно-сталева плита
+		draw_rect(r, Color(0.065, 0.075, 0.09, 0.94), true)
+		# Тонкі горизонтальні лінії сканера
+		for y in range(6, int(size.y) - 6, 4):
+			draw_line(Vector2(4, y), Vector2(size.x - 4, y), Color(1, 1, 1, 0.018), 1.0)
+		# Зовнішня темна кромка та латунна фаска
+		draw_rect(r, Color(0.03, 0.035, 0.045, 0.98), false, 3.0)
+		var brass := Color(0.72, 0.60, 0.35, 0.96)
+		draw_rect(r.grow(-2.0), brass, false, 2.0)
+		draw_line(Vector2(4.0, 3.0), Vector2(size.x - 4.0, 3.0), brass.lightened(0.28), 1.5)
+		draw_rect(r.grow(-5.0), Color(0.18, 0.20, 0.24, 0.70), false, 1.0)
+
+		# 4 кутові заклепки
+		var rivets := [
+			Vector2(7.0, 7.0),
+			Vector2(size.x - 7.0, 7.0),
+			Vector2(7.0, size.y - 7.0),
+			Vector2(size.x - 7.0, size.y - 7.0),
+		]
+		for p in rivets:
+			draw_circle(p, 3.0, Color(0.10, 0.09, 0.07, 1.0))
+			draw_circle(p, 1.9, brass.lightened(0.18))
+
+
+class _HudBarTicks extends Control:
+	var segments: int = 10
+
+	func _draw() -> void:
+		if segments <= 1:
+			return
+		var step := size.x / float(segments)
+		for i in range(1, segments):
+			var x := roundf(float(i) * step)
+			draw_line(Vector2(x, 0.0), Vector2(x, 6.0), Color(0.04, 0.04, 0.05, 0.55), 1.5)
+			draw_line(Vector2(x, size.y - 6.0), Vector2(x, size.y), Color(0.04, 0.04, 0.05, 0.55), 1.5)
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.02, 0.03, 0.85), false, 1.5)
+
