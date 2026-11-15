@@ -2,6 +2,7 @@ extends Node2D
 
 const GAME_STATE := preload("res://scripts/game_state.gd")
 const PAUSE_MENU_SCRIPT := preload("res://scripts/pause_menu.gd")
+const TRANSMISSION_DIALOG_SCRIPT := preload("res://scripts/transmission_dialog.gd")
 const BATTLE_BGM_STREAM := preload("res://assets/battle_bgm.mp3")
 const BOSS_BGM_STREAM := preload("res://assets/boss_bgm.mp3")
 const UPGRADE_SCENE_PATH := "res://scenes/upgrade_menu.tscn"
@@ -17,6 +18,7 @@ var _level_earned := 0
 var _bgm_player: AudioStreamPlayer = null
 var _pause_menu: PauseMenu = null
 var _pause_hud_btn: Button = null
+var _intro_dialog: TransmissionDialog = null
 
 # Смужка прогресу рівня з повзунком справа зверху
 var _progress_panel: ColorRect = null
@@ -61,17 +63,54 @@ func _ready() -> void:
 	tween.tween_property(fade_in, "color:a", 0.0, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tween.tween_callback(fade_in.queue_free)
 
+	if GAME_STATE.current_level == 1:
+		wave_manager.auto_start = false
+		_show_level_1_intro_dialog()
+
 
 func _process(delta: float) -> void:
 	_update_progress_bar(delta)
-	if not _game_over:
+	if not _game_over and _intro_dialog == null:
 		_elapsed_time += delta
-	elif not _transitioning and Input.is_action_just_pressed("ui_accept"):
+	elif _game_over and not _transitioning and Input.is_action_just_pressed("ui_accept"):
 		if _campaign_won:
 			GAME_STATE.reset_campaign()
 			_fade_to_scene(MAIN_MENU_SCENE_PATH)
 		else:
 			_fade_to_scene(UPGRADE_SCENE_PATH)
+
+
+func _show_level_1_intro_dialog() -> void:
+	if player and player.has_method("set_input_locked"):
+		player.set_input_locked(true)
+	if _pause_menu:
+		_pause_menu.set_can_toggle_pause(false)
+	if _pause_hud_btn:
+		_pause_hud_btn.visible = false
+
+	var dialog := TRANSMISSION_DIALOG_SCRIPT.new() as TransmissionDialog
+	var dialogue_lines: Array[Dictionary] = [
+		{"speaker": "enemy", "text": "Ми даємо тобі останній шанс здатися"},
+		{"speaker": "hero", "text": "а якщо не здамся?"},
+		{"speaker": "enemy", "text": "тоді ти не доживеш до релізу гта 6"},
+		{"speaker": "hero", "text": "ну щас побачим"}
+	]
+	dialog.setup(dialogue_lines, "ПЕРЕХОПЛЕНІ ПЕРЕГОВОРИ")
+	dialog.finished.connect(_on_intro_dialog_finished)
+	_intro_dialog = dialog
+	add_child(dialog)
+
+
+func _on_intro_dialog_finished() -> void:
+	_intro_dialog = null
+	if player and player.has_method("set_input_locked"):
+		player.set_input_locked(false, 0.18)
+	if _pause_menu:
+		_pause_menu.set_can_toggle_pause(true)
+	if _pause_hud_btn:
+		_pause_hud_btn.visible = true
+	if wave_manager and not _game_over:
+		wave_manager.start_waves()
 
 
 func _create_top_right_progress_bar() -> void:

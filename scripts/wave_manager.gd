@@ -97,7 +97,12 @@ func _ready() -> void:
 	add_child(_boss_minion_timer)
 
 	if auto_start:
-		call_deferred("start_waves")
+		call_deferred("_auto_start_if_enabled")
+
+
+func _auto_start_if_enabled() -> void:
+	if auto_start:
+		start_waves()
 
 
 func start_waves() -> void:

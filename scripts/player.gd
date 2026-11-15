@@ -140,6 +140,9 @@ var _hp_trail_ratio := 1.0
 var _hp_trail_hold_timer := 0.0
 var _ammo_trail_ratio := 1.0
 var _ammo_trail_hold_timer := 0.0
+var _input_locked := false
+var _input_release_grace := 0.0
+var _require_shoot_release := false
 
 @onready var shadow: Polygon2D = get_node_or_null("Shadow")
 @onready var body: Sprite2D = $Body
@@ -180,6 +183,20 @@ func _ready() -> void:
 	_update_hud()
 
 
+func set_input_locked(locked: bool, release_grace: float = 0.0) -> void:
+	_input_locked = locked
+	if locked:
+		_input_release_grace = 0.0
+		_require_shoot_release = false
+	else:
+		_input_release_grace = maxf(release_grace, 0.0)
+		_require_shoot_release = Input.is_action_pressed("shoot")
+
+
+func is_input_locked() -> bool:
+	return _input_locked
+
+
 func _process(delta: float) -> void:
 	_anim_time += delta
 	_update_shot_effects(delta)
@@ -195,10 +212,15 @@ func _process(delta: float) -> void:
 	_grenade_cooldown_timer = maxf(_grenade_cooldown_timer - delta, 0.0)
 	_heal_cooldown_timer = maxf(_heal_cooldown_timer - delta, 0.0)
 	_trickle_reload_timer = maxf(_trickle_reload_timer - delta, 0.0)
+	_input_release_grace = maxf(_input_release_grace - delta, 0.0)
+	if _require_shoot_release and not Input.is_action_pressed("shoot"):
+		_require_shoot_release = false
+
+	var inputs_blocked := _input_locked or (_input_release_grace > 0.0) or _require_shoot_release
 
 	if is_rolling:
 		_process_roll(delta)
-	else:
+	elif not inputs_blocked:
 		_handle_roll_input()
 		_handle_grenade_input()
 		_handle_heal_input()
@@ -214,8 +236,8 @@ func _process(delta: float) -> void:
 	# Логіка укриття: у стані спокою (коли не стріляємо) боєць захований в окопі й не отримує урон.
 	# Коли затискаємо ЛКМ (shoot) і є патрони — висовується з окопу, веде гвинтівку за прицілом і стріляє.
 	var busy_action := (_grenade_throw_timer > 0.0) or (_heal_anim_timer > 0.0)
-	var force_cover := Input.is_action_pressed("cover") and not busy_action
-	var wants_to_shoot := Input.is_action_pressed("shoot") and ammo > 0 and not force_cover and not is_rolling and not busy_action
+	var force_cover := (not inputs_blocked) and Input.is_action_pressed("cover") and not busy_action
+	var wants_to_shoot := (not inputs_blocked) and Input.is_action_pressed("shoot") and ammo > 0 and not force_cover and not is_rolling and not busy_action
 
 	if wants_to_shoot or busy_action:
 		_combat_expose_timer = 0.16

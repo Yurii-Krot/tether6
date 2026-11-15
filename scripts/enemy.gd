@@ -18,6 +18,14 @@ const ENEMY_ROW_DEATH := 3
 const GRENADIER_ROCKET_SCRIPT := preload("res://scripts/grenadier_rocket.gd")
 const AXE_PROJECTILE_SCRIPT := preload("res://scripts/axe_projectile.gd")
 const WARNING_BEEP_STREAM := preload("res://assets/warning_beep.mp3")
+const ENEMY_DEATH_STREAMS: Array[AudioStream] = [
+	preload("res://assets/enemy_death_01.mp3"),
+	preload("res://assets/enemy_death_02.mp3"),
+	preload("res://assets/enemy_death_03.mp3"),
+	preload("res://assets/enemy_death_04.mp3"),
+	preload("res://assets/enemy_death_05.mp3"),
+	preload("res://assets/enemy_death_06.mp3"),
+]
 const DEATH_SHEET_CONFIGS: Dictionary = {
 	"res://assets/enemy_spritesheet.png": {
 		"texture": preload("res://assets/enemy_death_sheet.png"),
@@ -133,6 +141,8 @@ var _hp_bar_timer := 0.0
 const HP_BAR_SHOW_DURATION := 0.52
 const HP_BAR_WIDTH := 64.0
 const HP_BAR_HEIGHT := 7.0
+
+static var _last_death_voice_idx := -1
 
 var _anim_time := 0.0
 var _shoot_anim_timer := 0.0
@@ -973,6 +983,7 @@ func _enter_dead_state() -> void:
 	_hp_bar_timer = 0.0
 
 	died.emit()
+	_play_death_voice()
 
 	if is_inside_tree() and was_rappelling:
 		# Збитий на канаті — зривається й падає на землю в точку приземлення
@@ -1026,6 +1037,37 @@ func _enter_dead_state() -> void:
 			tween.chain().tween_callback(queue_free)
 	else:
 		queue_free()
+
+
+func _play_death_voice() -> void:
+	if is_boss or ENEMY_DEATH_STREAMS.is_empty() or not is_inside_tree():
+		return
+	var host := get_parent()
+	if host == null:
+		return
+
+	var idx := randi() % ENEMY_DEATH_STREAMS.size()
+	if ENEMY_DEATH_STREAMS.size() > 1 and idx == _last_death_voice_idx:
+		idx = (idx + 1 + randi() % (ENEMY_DEATH_STREAMS.size() - 1)) % ENEMY_DEATH_STREAMS.size()
+	_last_death_voice_idx = idx
+
+	var stream: AudioStream = ENEMY_DEATH_STREAMS[idx]
+	if stream == null:
+		return
+	if stream is AudioStreamMP3:
+		(stream as AudioStreamMP3).loop = false
+
+	var sfx := AudioStreamPlayer.new()
+	sfx.name = "EnemyDeathVoice"
+	sfx.set_meta("_enemy_death_voice", true)
+	sfx.stream = stream
+	sfx.volume_db = -3.5
+	sfx.pitch_scale = randf_range(0.95, 1.05)
+	if AudioServer.get_bus_index("SFX") != -1:
+		sfx.bus = "SFX"
+	host.add_child(sfx)
+	sfx.finished.connect(sfx.queue_free)
+	sfx.play()
 
 
 func _spawn_ground_blood_splatter() -> void:

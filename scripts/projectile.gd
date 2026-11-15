@@ -4,6 +4,7 @@ extends Node2D
 const TEX_YELLOW := preload("res://assets/bullet_yellow.png")
 const TEX_BLUE := preload("res://assets/bullet_blue.png")
 const TEX_RED := preload("res://assets/bullet_red.png")
+const MAP_BOUNDS := Rect2(Vector2(-160.0, -180.0), Vector2(1800.0, 1080.0))
 
 enum BulletType {
 	PLAYER_YELLOW,
@@ -39,13 +40,14 @@ func setup(
 
 	var diff := p_target_pos - start_pos
 	var dist := diff.length()
-	direction = (diff / dist) if dist > 0.001 else Vector2.RIGHT
+	var fallback_dir := Vector2.RIGHT if bullet_type == BulletType.PLAYER_YELLOW else Vector2.LEFT
+	direction = (diff / dist) if dist > 0.001 else fallback_dir
 	rotation = direction.angle()
 
 	if has_ground_stop and dist > 20.0:
 		max_distance = dist
 	else:
-		max_distance = 2600.0
+		max_distance = INF
 
 	if p_speed > 0.0:
 		speed = p_speed
@@ -97,14 +99,13 @@ func _physics_process(delta: float) -> void:
 	global_position = next_pos
 	_traveled += step_dist
 
-	if _traveled >= max_distance:
-		if has_ground_stop:
-			global_position = target_point
-			_spawn_impact_sparks(target_point, false)
+	if has_ground_stop and _traveled >= max_distance:
+		global_position = target_point
+		_spawn_impact_sparks(target_point, false)
 		queue_free()
 		return
 
-	if global_position.x < -80.0 or global_position.x > 1360.0 or global_position.y < -80.0 or global_position.y > 800.0:
+	if not MAP_BOUNDS.has_point(global_position):
 		queue_free()
 
 
@@ -167,12 +168,6 @@ func _check_enemy_bullet_hit(from_pos: Vector2, to_pos: Vector2) -> bool:
 				if player.has_method("take_damage"):
 					player.take_damage(damage)
 				_spawn_impact_sparks(closest, true)
-				queue_free()
-				return true
-			elif in_cover:
-				# Ворожа куля б'ється об бруствер перед окопом
-				var parapet_pos := Vector2(player.global_position.x + 18.0, closest.y)
-				_spawn_impact_sparks(parapet_pos, false)
 				queue_free()
 				return true
 
