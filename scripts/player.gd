@@ -12,51 +12,99 @@ const ICON_GRENADE := preload("res://assets/icon_grenade.png")
 const ICON_MEDKIT := preload("res://assets/icon_medkit.png")
 const GRENADE_SCRIPT := preload("res://scripts/grenade.gd")
 const GAME_STATE := preload("res://scripts/game_state.gd")
-const DEATH_SHEET_TEX := preload("res://assets/player_death_sheet.png")
-const SKIN_SHEET_STANDARD := preload("res://assets/player_spritesheet.png")
-const SKIN_SHEET_GOLD := preload("res://assets/player_spritesheet_shades_gold.png")
-const SKIN_SHEET_CYBER := preload("res://assets/player_spritesheet_shades_cyber.png")
-const SKIN_SHEET_BLACK := preload("res://assets/player_spritesheet_shades_black.png")
+const ARMOR_BODY_SHEETS: Array[Texture2D] = [
+	preload("res://assets/armor/armor_tier_1_sheet.png"),
+	preload("res://assets/armor/armor_tier_2_sheet.png"),
+	preload("res://assets/armor/armor_tier_3_sheet.png"),
+	preload("res://assets/armor/armor_tier_4_sheet.png"),
+	preload("res://assets/armor/armor_tier_5_sheet.png"),
+	preload("res://assets/armor/armor_tier_6_sheet.png"),
+	preload("res://assets/armor/armor_tier_7_sheet.png"),
+]
+const ARMOR_DEATH_SHEETS: Array[Texture2D] = [
+	preload("res://assets/armor/armor_tier_1_death_sheet.png"),
+	preload("res://assets/armor/armor_tier_2_death_sheet.png"),
+	preload("res://assets/armor/armor_tier_3_death_sheet.png"),
+	preload("res://assets/armor/armor_tier_4_death_sheet.png"),
+	preload("res://assets/armor/armor_tier_5_death_sheet.png"),
+	preload("res://assets/armor/armor_tier_6_death_sheet.png"),
+	preload("res://assets/armor/armor_tier_7_death_sheet.png"),
+]
+const ARMOR_REAR_SLEEVE_SHEETS: Array[Texture2D] = [
+	preload("res://assets/armor/armor_tier_1_rear_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_2_rear_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_3_rear_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_4_rear_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_5_rear_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_6_rear_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_7_rear_sleeve_sheet.png"),
+]
+const ARMOR_FRONT_SLEEVE_SHEETS: Array[Texture2D] = [
+	preload("res://assets/armor/armor_tier_1_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_2_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_3_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_4_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_5_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_6_sleeve_sheet.png"),
+	preload("res://assets/armor/armor_tier_7_sleeve_sheet.png"),
+]
+const WEAPON_SHEETS: Array[Texture2D] = [
+	preload("res://assets/weapons/weapon_tier_1_sheet.png"),
+	preload("res://assets/weapons/weapon_tier_2_sheet.png"),
+	preload("res://assets/weapons/weapon_tier_3_sheet.png"),
+	preload("res://assets/weapons/weapon_tier_4_sheet.png"),
+	preload("res://assets/weapons/weapon_tier_5_sheet.png"),
+	preload("res://assets/weapons/weapon_tier_6_sheet.png"),
+	preload("res://assets/weapons/weapon_tier_7_sheet.png"),
+]
+const WEAPON_MUZZLE_LOCAL_POSITIONS: Array[Vector2] = [
+	Vector2(109.7, -0.8), # Weapon Tier 1
+	Vector2(114.1, -0.8), # Weapon Tier 2
+	Vector2(118.4, -0.8), # Weapon Tier 3
+	Vector2(121.3, -0.8), # Weapon Tier 4 (Suppressor)
+	Vector2(118.0, -0.8), # Weapon Tier 5 (Suppressor + ACOG)
+	Vector2(118.9, -0.8), # Weapon Tier 6 (Suppressor + PMAG)
+	Vector2(121.8, -0.8), # Weapon Tier 7 (Suppressor + Drum)
+]
 const DEATH_THUD_SOUND := preload("res://assets/grenade_explosion.wav")
-const BASE_SPRITE_SCALE := Vector2(0.64, 0.64)
-const SHOULDER_OFFSET_STAND := Vector2(-11.5, -7.5)
-const SHOULDER_OFFSET_CROUCH := Vector2(-15.0, 8.5)
-const EJECT_LOCAL_POS := Vector2(37.0, -6.5)
+const BASE_SPRITE_SCALE := Vector2(0.78, 0.78)
+const BODY_TEXTURE_OFFSET := Vector2(32.0, -40.0)
+const RIFLE_TEXTURE_OFFSET := Vector2(64.0, 0.0)
+const ARMOR_SHOULDER_STAND_OFFSETS: Array[Vector2] = [
+	Vector2(-25.3, -60.8), # Tier 1
+	Vector2(-23.2, -60.8), # Tier 2
+	Vector2(-23.2, -60.8), # Tier 3
+	Vector2(-25.3, -60.8), # Tier 4
+	Vector2(-23.2, -61.7), # Tier 5
+	Vector2(-21.9, -61.7), # Tier 6
+	Vector2(-23.2, -60.8), # Tier 7
+]
+const ARMOR_SHOULDER_CROUCH_OFFSETS: Array[Vector2] = [
+	Vector2(-29.8, -38.8), # Tier 1
+	Vector2(-27.7, -38.9), # Tier 2
+	Vector2(-27.7, -38.9), # Tier 3
+	Vector2(-29.8, -38.8), # Tier 4
+	Vector2(-27.8, -39.8), # Tier 5
+	Vector2(-26.4, -39.8), # Tier 6
+	Vector2(-27.7, -38.9), # Tier 7
+]
+const EJECT_LOCAL_POS := Vector2(45.0, -4.0)
 
-# Рядки у спрайт-листі тіла res://assets/player_spritesheet.png (6x8 кадрів) та окремому листі смерті (6x4)
-const ANIM_COLS := 6
+# Рядки у спрайт-листі броні (12x8 кадрів) та окремому листі смерті (12x4)
+const ANIM_COLS := 12
 const ANIM_ROW_IDLE := 0
 const ANIM_ROW_SHOOT := 1
 const ANIM_ROW_CROUCH := 2
 const ANIM_ROW_ROLL := 3
-const DEATH_TOTAL_FRAMES := 24
+const DEATH_TOTAL_FRAMES := 41
 
-# Нерівномірний графік кадрів смерті з різким опусканням пушки та гравітаційним прискоренням при падінні
+# Плавний графік 41-кадрової багатосуглобової смерті: удар -> згинання колін -> падіння на спину -> відскок та фіксація на землі
 const DEATH_FRAME_TIMES: Array[float] = [
-	0.000, # 0: Фатальний удар
-	0.024, # 1: Руки слабшають, пушка починає різко опускатися під власною вагою
-	0.048, # 2: Ствол іде вниз, голова й плечі хиляться вперед
-	0.075, # 3: Пушка різко опущена вниз (+30°), корпус зігнутий під вагою
-	0.150, # 4: Коротка фіксація важко опущеної пушки (як на гіфці)
-	0.200, # 5: Коліна підгинаються глибше
-	0.245, # 6: Важкий ранець перетягує корпус назад
-	0.290, # 7: Передня нога відривається від землі
-	0.330, # 8: Передня нога високо піднята в коліні, втрата рівноваги назад
-	0.368, # 9: Перехід через точку рівноваги
-	0.402, # 10: Опорна нога підломлюється
-	0.430, # 11: РІЗКЕ ПАДІННЯ ПІД ГРАВІТАЦІЄЮ (прискорення вниз!)
-	0.453, # 12: Стрімке падіння спиною донизу, пушка падає вниз на ноги
-	0.473, # 13: Максимальна швидкість падіння перед землею
-	0.490, # 14: ВАЖКИЙ УДАР РАНЦЕМ ОБ ЗЕМЛЮ! (тряска екрана + пил + гуп)
-	0.525, # 15: Пружний відскок тіла і пушки від важкого удару об ґрунт
-	0.560, # 16: Верхня точка невеликого відскоку
-	0.595, # 17: Повторне приземлення на ранець
-	0.640, # 18: Затухання вібрації
-	0.690, # 19: Важке просідання голови й пушки
-	0.745, # 20: Фіксація на землі
-	0.800, # 21: Фінальна поза
-	0.855, # 22: Фінальна поза
-	0.910, # 23: Фінальна поза
+	0.000, 0.022, 0.044, 0.066, 0.088, 0.110, 0.132, 0.155, 0.178, 0.200,
+	0.222, 0.244, 0.266, 0.288, 0.312, 0.336, 0.360, 0.384, 0.408, 0.432,
+	0.456, 0.480, 0.504, 0.528, 0.552, 0.576, 0.600, 0.625, 0.650, 0.675,
+	0.700, 0.725, 0.750, 0.775, 0.800, 0.825, 0.850, 0.875, 0.900, 0.925,
+	0.950,
 ]
 
 @export var damage := 10.0
@@ -90,7 +138,6 @@ const DEATH_FRAME_TIMES: Array[float] = [
 var ammo := 30
 var health := 100.0
 var crit_chance := 0.0
-var damage_reduction := 0.0
 var cooldown := 0.0
 # У стані спокою боєць за замовчуванням захований в окопі (не отримує урон)
 var is_in_cover := true
@@ -111,7 +158,9 @@ var _roll_dir := 0.0
 var _afterimage_timer := 0.0
 var _anim_time := 0.0
 var _shoot_anim_timer := 0.0
-var _shoot_anim_duration := 0.20
+var _shoot_anim_duration := 0.10
+var _shoulder_stand_offset := Vector2(-7.7, -58.3)
+var _shoulder_crouch_offset := Vector2(-9.7, -39.3)
 var _combat_expose_timer := 0.0
 var _landing_squash_timer := 0.0
 var _current_aim_angle := 0.0
@@ -162,7 +211,9 @@ var _require_shoot_release := false
 @onready var body: Sprite2D = $Body
 @onready var weapon_pivot: Node2D = $WeaponPivot
 @onready var barrel: Node2D = $WeaponPivot/Barrel
+@onready var rear_arm_sprite: Sprite2D = get_node_or_null("WeaponPivot/Barrel/RearArmSprite")
 @onready var weapon_sprite: Sprite2D = get_node_or_null("WeaponPivot/Barrel/WeaponSprite")
+@onready var front_arm_sprite: Sprite2D = get_node_or_null("WeaponPivot/Barrel/FrontArmSprite")
 @onready var muzzle: Marker2D = $WeaponPivot/Barrel/Muzzle
 @onready var muzzle_flash: Polygon2D = $WeaponPivot/Barrel/Muzzle/MuzzleFlash
 @onready var tracer_line: Line2D = $TracerLine
@@ -179,26 +230,38 @@ func _ready() -> void:
 
 	max_health = float(GAME_STATE.get_player_max_health())
 	damage = float(GAME_STATE.get_player_bullet_damage())
-	fire_rate = GAME_STATE.get_player_fire_rate()
-	magazine_size = GAME_STATE.get_player_magazine_size()
-	reload_time = GAME_STATE.get_player_reload_time()
 	bullet_speed = GAME_STATE.get_player_bullet_speed()
 	crit_chance = GAME_STATE.get_player_crit_chance()
-	damage_reduction = GAME_STATE.get_player_damage_reduction()
 	heal_cooldown = GAME_STATE.get_player_medkit_cooldown()
 	grenade_damage = float(GAME_STATE.get_player_grenade_damage())
 	grenade_cooldown = GAME_STATE.get_player_grenade_cooldown()
 
+	var tier_idx := clampi(GAME_STATE.get_armor_tier() - 1, 0, ARMOR_BODY_SHEETS.size() - 1)
+	var weapon_idx := clampi(GAME_STATE.get_weapon_tier() - 1, 0, WEAPON_SHEETS.size() - 1)
+	_shoulder_stand_offset = ARMOR_SHOULDER_STAND_OFFSETS[tier_idx]
+	_shoulder_crouch_offset = ARMOR_SHOULDER_CROUCH_OFFSETS[tier_idx]
 	if body != null:
-		match GAME_STATE.hero_skin:
-			"shades_gold":
-				body.texture = SKIN_SHEET_GOLD
-			"shades_cyber":
-				body.texture = SKIN_SHEET_CYBER
-			"shades_black":
-				body.texture = SKIN_SHEET_BLACK
-			_:
-				body.texture = SKIN_SHEET_STANDARD
+		body.texture = ARMOR_BODY_SHEETS[tier_idx]
+		body.hframes = ANIM_COLS
+		body.vframes = 8
+		body.offset = BODY_TEXTURE_OFFSET
+		body.scale = BASE_SPRITE_SCALE
+	for arm_sp in [rear_arm_sprite, front_arm_sprite]:
+		if arm_sp != null:
+			arm_sp.hframes = ANIM_COLS
+			arm_sp.offset = RIFLE_TEXTURE_OFFSET
+			arm_sp.scale = BASE_SPRITE_SCALE
+	if rear_arm_sprite != null:
+		rear_arm_sprite.texture = ARMOR_REAR_SLEEVE_SHEETS[tier_idx]
+	if front_arm_sprite != null:
+		front_arm_sprite.texture = ARMOR_FRONT_SLEEVE_SHEETS[tier_idx]
+	if weapon_sprite != null:
+		weapon_sprite.texture = WEAPON_SHEETS[weapon_idx]
+		weapon_sprite.hframes = ANIM_COLS
+		weapon_sprite.offset = RIFLE_TEXTURE_OFFSET
+		weapon_sprite.scale = BASE_SPRITE_SCALE
+	if muzzle != null:
+		muzzle.position = WEAPON_MUZZLE_LOCAL_POSITIONS[weapon_idx]
 
 	ammo = magazine_size
 	health = max_health
@@ -305,6 +368,18 @@ func _process(delta: float) -> void:
 			_update_hud()
 
 
+func _set_weapon_frame(frame_idx: int) -> void:
+	for sp in [rear_arm_sprite, weapon_sprite, front_arm_sprite]:
+		if sp != null:
+			sp.frame = frame_idx
+
+
+func _set_weapon_modulate(col: Color) -> void:
+	for sp in [rear_arm_sprite, weapon_sprite, front_arm_sprite]:
+		if sp != null:
+			sp.modulate = col
+
+
 func _update_weapon_aim(delta: float, mouse_pos: Vector2) -> void:
 	if is_rolling:
 		weapon_pivot.visible = false
@@ -316,39 +391,35 @@ func _update_weapon_aim(delta: float, mouse_pos: Vector2) -> void:
 	var clamped_aim := clampf(raw_angle, -0.78, 0.78)
 
 	if is_in_cover and _grenade_throw_timer <= 0.0 and _heal_anim_timer <= 0.0:
-		# В окопі гвинтівка опущена вниз-вперед і рухається під час перезарядки
-		var reload_angle := 0.22 + (sin(_anim_time * 11.0) * 0.12 if ammo < magazine_size else sin(_anim_time * 3.0) * 0.03)
+		# У стані спокою в окопі гвинтівка нерухома внизу-вперед; рухається лише легко при активній перезарядці
+		var reload_angle := 0.22 + (sin(_anim_time * 9.0) * 0.05 if ammo < magazine_size else 0.0)
 		_current_aim_angle = lerp_angle(_current_aim_angle, reload_angle, minf(delta * 14.0, 1.0))
-		weapon_pivot.position = body.position + SHOULDER_OFFSET_CROUCH
+		weapon_pivot.position = body.position + _shoulder_crouch_offset
 		weapon_pivot.rotation = _current_aim_angle
-		if weapon_sprite:
-			weapon_sprite.frame = 0
-			weapon_sprite.modulate = body.modulate
+		_set_weapon_frame(0)
+		_set_weapon_modulate(body.modulate)
 	elif _heal_anim_timer > 0.0:
-		# Анімація хілки (як на скріні): плавно піднімає гвинтівку вертикально вгору (-90°), тримає над головою і опускає назад
+		# Анімація хілки: плавно піднімає гвинтівку вертикально вгору (-90°), тримає над головою і опускає назад
 		var raise_env := _get_heal_raise_envelope()
 		var target_heal_angle := lerpf(0.0, -PI * 0.5, raise_env)
 		_current_aim_angle = target_heal_angle
-		weapon_pivot.position = body.position + SHOULDER_OFFSET_STAND + Vector2(-4.5 * raise_env, -15.0 * raise_env)
+		weapon_pivot.position = body.position + _shoulder_stand_offset + Vector2(-4.5 * raise_env, -15.0 * raise_env)
 		weapon_pivot.rotation = _current_aim_angle
-		if weapon_sprite:
-			weapon_sprite.frame = 0
-			weapon_sprite.modulate = body.modulate
+		_set_weapon_frame(0)
+		_set_weapon_modulate(body.modulate)
 	elif _grenade_throw_timer > 0.0:
-		# Фаза метання/пуску гранати (як у Рядку 0 кадри 0..8 референсу): піднімає ствол вгору під кутом ~40° і робить постріл гранатою по навісній траєкторії
+		# Фаза метання/пуску гранати: піднімає ствол вгору під кутом ~40° і робить постріл гранатою по навісній траєкторії
 		var throw_angle := -0.68
 		_current_aim_angle = lerp_angle(_current_aim_angle, throw_angle, minf(delta * 28.0, 1.0))
-		weapon_pivot.position = body.position + SHOULDER_OFFSET_STAND
+		weapon_pivot.position = body.position + _shoulder_stand_offset
 		weapon_pivot.rotation = _current_aim_angle + _recoil_angle
-		if weapon_sprite:
-			weapon_sprite.modulate = body.modulate
+		_set_weapon_modulate(body.modulate)
 	else:
 		# Під час стрільби гвинтівка з руками точно ходить за перехрестям мишки!
 		_current_aim_angle = lerp_angle(_current_aim_angle, clamped_aim, minf(delta * 24.0, 1.0))
-		weapon_pivot.position = body.position + SHOULDER_OFFSET_STAND
+		weapon_pivot.position = body.position + _shoulder_stand_offset
 		weapon_pivot.rotation = _current_aim_angle + _recoil_angle
-		if weapon_sprite:
-			weapon_sprite.modulate = body.modulate
+		_set_weapon_modulate(body.modulate)
 
 
 func _update_sprite_frame_animation(delta: float) -> void:
@@ -360,18 +431,17 @@ func _update_sprite_frame_animation(delta: float) -> void:
 		land_squash = sin((_landing_squash_timer / 0.14) * PI)
 
 	if is_in_cover:
-		# Рядок 2: у стані спокою боєць сидить пригнувшись глибоко в окопі (в безпеці)
-		var reload_bob := sin(_anim_time * 11.0) * 1.5 if ammo < magazine_size else sin(_anim_time * 3.0) * 0.6
-		body.position = Vector2(-10.0, 6.0 + reload_bob + land_squash * 4.0)
+		# Рядок 2 (кадр 0): спокійна стійка в укритті по центру плитки окопу без зайвого хитання
+		var reload_bob := sin(_anim_time * 9.0) * 0.6 if ammo < magazine_size else 0.0
+		body.position = Vector2(-1.5, 2.0 + reload_bob + land_squash * 4.0)
 		body.scale = Vector2(
-			BASE_SPRITE_SCALE.x * (1.0 + 0.12 * land_squash),
-			BASE_SPRITE_SCALE.y * (1.0 - 0.14 * land_squash)
+			BASE_SPRITE_SCALE.x * (1.0 + 0.09 * land_squash),
+			BASE_SPRITE_SCALE.y * (1.0 - 0.11 * land_squash)
 		)
-		var col := int(_anim_time * 9.0) % ANIM_COLS if ammo < magazine_size else 0
-		body.frame_coords = Vector2i(col, ANIM_ROW_CROUCH)
+		body.frame_coords = Vector2i(0, ANIM_ROW_CROUCH)
 		if shadow:
-			shadow.position = Vector2(-10.0, 48.0)
-			shadow.scale = Vector2(1.42 + 0.12 * land_squash, 1.15)
+			shadow.position = Vector2(-1.5, 58.0)
+			shadow.scale = Vector2(1.58 + 0.10 * land_squash, 1.32)
 		return
 
 	# Бойова стійка під час стрільби (+ легке сіпання корпусу назад при отриманні болю)
@@ -379,26 +449,23 @@ func _update_sprite_frame_animation(delta: float) -> void:
 	body.position = Vector2(-hurt_flinch * 6.5, land_squash * 3.5)
 	body.rotation = -hurt_flinch * 0.09
 	body.scale = Vector2(
-		BASE_SPRITE_SCALE.x * (1.0 + 0.10 * land_squash - 0.05 * hurt_flinch),
-		BASE_SPRITE_SCALE.y * (1.0 - 0.12 * land_squash + 0.04 * hurt_flinch)
+		BASE_SPRITE_SCALE.x * (1.0 + 0.08 * land_squash - 0.04 * hurt_flinch),
+		BASE_SPRITE_SCALE.y * (1.0 - 0.10 * land_squash + 0.03 * hurt_flinch)
 	)
 	if shadow:
-		shadow.position = Vector2(0.0, 48.0)
-		shadow.scale = Vector2(1.28, 1.28)
+		shadow.position = Vector2(0.0, 58.0)
+		shadow.scale = Vector2(1.48, 1.48)
 
 	if _shoot_anim_timer > 0.0:
 		_shoot_anim_timer = maxf(_shoot_anim_timer - delta, 0.0)
-		var progress := 1.0 - (_shoot_anim_timer / _shoot_anim_duration)
+		var progress := clampf(1.0 - (_shoot_anim_timer / maxf(_shoot_anim_duration, 0.02)), 0.0, 0.999)
 		var shoot_col := clampi(int(progress * float(ANIM_COLS)), 0, ANIM_COLS - 1)
 		body.frame_coords = Vector2i(shoot_col, ANIM_ROW_SHOOT)
-		if weapon_sprite:
-			# Кадри 1..5 на листі гвинтівки — фази пострілу, полум'я, газів та диму
-			weapon_sprite.frame = clampi(1 + int(progress * 5.0), 1, 5)
+		# Кадри 1..11 на листах зброї та рукавів — плавні фази пострілу, полум'я, газів та диму
+		_set_weapon_frame(clampi(1 + int(progress * float(ANIM_COLS - 1)), 1, ANIM_COLS - 1))
 	else:
-		var idle_col := int(_anim_time * 6.5) % ANIM_COLS
-		body.frame_coords = Vector2i(idle_col, ANIM_ROW_IDLE)
-		if weapon_sprite:
-			weapon_sprite.frame = 0
+		body.frame_coords = Vector2i(0, ANIM_ROW_IDLE)
+		_set_weapon_frame(0)
 
 
 func shoot(aim: Vector2) -> void:
@@ -433,8 +500,7 @@ func take_damage(amount: float, ignore_cover: bool = false) -> void:
 	if is_in_cover and not ignore_cover:
 		return
 
-	var mitigated_amount := maxf(1.0, amount * (1.0 - clampf(damage_reduction, 0.0, 0.65)))
-	health = maxf(health - mitigated_amount, 0.0)
+	health = maxf(health - amount, 0.0)
 	_hp_trail_hold_timer = 0.30
 	health_changed.emit(health, max_health)
 	_update_hud()
@@ -503,8 +569,7 @@ func _process_heal_anim(delta: float) -> void:
 	if _damage_tint_timer <= 0.0:
 		var glow := sin(prog * PI) * 0.45
 		body.modulate = Color(1.0 - glow * 0.2, 1.0 + glow * 0.45, 1.0 - glow * 0.2, 1.0)
-		if weapon_sprite:
-			weapon_sprite.modulate = body.modulate
+		_set_weapon_modulate(body.modulate)
 
 	# На піку підняття пушки (0.26 прогресу) відновлюємо все ХП на 100% і запускаємо ефект лікування
 	if prog >= 0.26 and not _heal_applied:
@@ -522,8 +587,7 @@ func _process_heal_anim(delta: float) -> void:
 		body.scale = BASE_SPRITE_SCALE
 		if _damage_tint_timer <= 0.0:
 			body.modulate = Color(0.72, 0.76, 0.80, 0.98) if is_in_cover else Color.WHITE
-			if weapon_sprite:
-				weapon_sprite.modulate = body.modulate
+			_set_weapon_modulate(body.modulate)
 		_update_hud()
 
 
@@ -594,10 +658,9 @@ func _launch_grenade_projectile() -> void:
 	gren.setup(launch_from, target_pos, grenade_damage, grenade_radius)
 	parent_node.add_child(gren)
 
-	# Візуальна та звукова віддача пуску гранати (як на кадрі 8-9 Рядка 0 референсу)
-	_shoot_anim_timer = 0.18
-	if weapon_sprite:
-		weapon_sprite.frame = 2
+	# Візуальна та звукова віддача пуску гранати
+	_shoot_anim_timer = _shoot_anim_duration
+	_set_weapon_frame(2)
 	_recoil_offset = recoil_distance * 1.45
 	_recoil_angle = -0.10
 	barrel.position.x = -_recoil_offset
@@ -674,8 +737,8 @@ func _process_roll(delta: float) -> void:
 	)
 
 	if shadow:
-		shadow.position = Vector2(arc * 12.0, 48.0)
-		shadow.scale = Vector2((1.0 - 0.42 * arc) * 1.28, (1.0 - 0.42 * arc) * 1.28)
+		shadow.position = Vector2(arc * 12.0, 58.0)
+		shadow.scale = Vector2((1.0 - 0.42 * arc) * 1.48, (1.0 - 0.42 * arc) * 1.48)
 
 	_afterimage_timer -= delta
 	if _afterimage_timer <= 0.0 and t < 0.92:
@@ -784,8 +847,7 @@ func _set_cover(active: bool) -> void:
 		body.scale = BASE_SPRITE_SCALE
 		body.frame_coords = Vector2i(0, ANIM_ROW_SHOOT)
 
-	if weapon_sprite:
-		weapon_sprite.modulate = body.modulate
+	_set_weapon_modulate(body.modulate)
 
 	_update_hud()
 
@@ -821,8 +883,7 @@ func _process_reload_in_cover(delta: float) -> void:
 func _trigger_shot_feedback() -> void:
 	_shoot_anim_timer = _shoot_anim_duration
 	body.frame_coords = Vector2i(0, ANIM_ROW_SHOOT)
-	if weapon_sprite:
-		weapon_sprite.frame = 1
+	_set_weapon_frame(1)
 
 	muzzle_flash.visible = false
 	tracer_line.visible = false
@@ -917,8 +978,7 @@ func _update_shot_effects(delta: float) -> void:
 				body.modulate = base_col.lerp(hurt_col, pulse * 0.85)
 			else:
 				body.modulate = base_col
-			if weapon_sprite:
-				weapon_sprite.modulate = body.modulate
+			_set_weapon_modulate(body.modulate)
 
 	_recoil_offset = move_toward(_recoil_offset, 0.0, recoil_recovery_speed * delta)
 	_recoil_angle = move_toward(_recoil_angle, 0.0, 0.55 * delta)
@@ -930,8 +990,7 @@ func _flash_damage() -> void:
 	_damage_tint_timer = 1.0
 	_hurt_flinch_timer = 0.20
 	body.modulate = Color(2.1, 0.52, 0.52, 1.0)
-	if weapon_sprite:
-		weapon_sprite.modulate = body.modulate
+	_set_weapon_modulate(body.modulate)
 
 
 func _die() -> void:
@@ -943,9 +1002,11 @@ func _die() -> void:
 	weapon_pivot.visible = false
 	muzzle_flash.visible = false
 	tracer_line.visible = false
-	body.texture = DEATH_SHEET_TEX
+	var tier_idx := clampi(GAME_STATE.get_armor_tier() - 1, 0, ARMOR_DEATH_SHEETS.size() - 1)
+	body.texture = ARMOR_DEATH_SHEETS[tier_idx]
 	body.hframes = ANIM_COLS
 	body.vframes = 4
+	body.offset = BODY_TEXTURE_OFFSET
 	body.rotation = 0.0
 	body.scale = BASE_SPRITE_SCALE
 	body.position = Vector2.ZERO
@@ -968,47 +1029,30 @@ func _process_death_anim(delta: float) -> void:
 	var col := step % ANIM_COLS
 	body.frame_coords = Vector2i(col, row)
 	body.rotation = 0.0
-
-	# Фізика падіння під силою тяжіння: різке прискорення вниз (t^2) + ударний сквош і відскок від землі
-	if _death_anim_elapsed < 0.402:
-		var pre_t := clampf(_death_anim_elapsed / 0.402, 0.0, 1.0)
-		body.position = Vector2(0.0, lerpf(0.0, 2.0, pre_t))
-		body.scale = BASE_SPRITE_SCALE
-	elif _death_anim_elapsed < 0.490:
-		var fall_t := clampf((_death_anim_elapsed - 0.402) / (0.490 - 0.402), 0.0, 1.0)
-		var grav_t := fall_t * fall_t
-		body.position = Vector2(lerpf(0.0, 5.0, grav_t), lerpf(2.0, 11.0, grav_t))
-		body.scale = Vector2(BASE_SPRITE_SCALE.x * lerpf(1.0, 0.96, grav_t), BASE_SPRITE_SCALE.y * lerpf(1.0, 1.05, grav_t))
-	elif _death_anim_elapsed < 0.530:
-		# Момент важкого удару спиною/ранцем об ґрунт окопу (стискання від ваги)
-		var imp_t := clampf((_death_anim_elapsed - 0.490) / 0.040, 0.0, 1.0)
-		body.position = Vector2(5.0, lerpf(12.5, 9.0, imp_t))
-		body.scale = Vector2(BASE_SPRITE_SCALE.x * lerpf(1.08, 0.98, imp_t), BASE_SPRITE_SCALE.y * lerpf(0.91, 1.02, imp_t))
-	elif _death_anim_elapsed < 0.610:
-		# Невеликий відскок і повторне приземлення під вагою броні
-		var bnc_t := clampf((_death_anim_elapsed - 0.530) / 0.080, 0.0, 1.0)
-		var arc := sin(bnc_t * PI)
-		body.position = Vector2(5.0, 11.0 - arc * 3.0)
-		body.scale = Vector2(BASE_SPRITE_SCALE.x * (1.0 - arc * 0.02), BASE_SPRITE_SCALE.y * (1.0 + arc * 0.02))
+	# Сама 41-кадрова анімація вже містить реалістичне опускання на коліна, відрив рук та фіксацію тіла на підлозі окопу!
+	if step >= 25 and step <= 29:
+		var imp := sin((float(step - 25) / 4.0) * PI)
+		body.position = Vector2(0.0, imp * 1.8)
+		body.scale = Vector2(BASE_SPRITE_SCALE.x * (1.0 + imp * 0.03), BASE_SPRITE_SCALE.y * (1.0 - imp * 0.03))
 	else:
-		body.position = Vector2(5.0, 11.0)
+		body.position = Vector2.ZERO
 		body.scale = BASE_SPRITE_SCALE
 
 	# Короткий спалах від фатального удару переходить у чисті кольори героя
 	var flash_t := clampf(_death_anim_elapsed / 0.14, 0.0, 1.0)
 	body.modulate = Color(1.75, 0.62, 0.62, 1.0).lerp(Color(0.95, 0.94, 0.94, 1.0), flash_t)
 
-	# Розширення тіні під ранцем під час падіння
+	# Розширення тіні під корпусом та ногами при падінні на дно окопу
 	if shadow:
-		var fall_prog := clampf((_death_anim_elapsed - 0.36) / 0.14, 0.0, 1.0)
-		shadow.position = Vector2(lerpf(0.0, 18.0, fall_prog), lerpf(56.0, 52.0, fall_prog))
-		shadow.scale = Vector2(lerpf(1.28, 1.76, fall_prog), 1.26)
+		var fall_prog := clampf((_death_anim_elapsed - 0.28) / 0.32, 0.0, 1.0)
+		shadow.position = Vector2(lerpf(0.0, 26.0, fall_prog), 58.0)
+		shadow.scale = Vector2(lerpf(1.48, 2.50, fall_prog), 1.38)
 
-	# Саме в момент падіння спиною на землю (step >= 14) — тряска екрана, клуби пилу й глухий удар
-	if step >= 14 and not _death_dust_spawned:
+	# У момент важкого удару спиною/ранцем об землю (step >= 25) — тряска екрана, пил і глухий удар
+	if step >= 25 and not _death_dust_spawned:
 		_death_dust_spawned = true
-		_spawn_trench_dust(global_position + Vector2(-4.0, 42.0), 0.45)
-		_spawn_trench_dust(global_position + Vector2(26.0, 44.0), 0.35)
+		_spawn_trench_dust(global_position + Vector2(-8.0, 48.0), 0.45)
+		_spawn_trench_dust(global_position + Vector2(28.0, 50.0), 0.35)
 		_play_death_ground_thud()
 		_trigger_death_ground_shake()
 
@@ -1330,10 +1374,7 @@ func _update_hud_bars(delta: float) -> void:
 	if _hp_bar_label:
 		_hp_bar_label.text = "♥ ХП: %d / %d" % [int(ceilf(health)), int(roundf(max_health))]
 	if _hp_armor_label:
-		var arm_pct := int(roundf(damage_reduction * 100.0))
-		_hp_armor_label.text = ("БРОНЯ -%d%%" % arm_pct) if arm_pct > 0 else (
-			"УКРИТТЯ" if is_in_cover else "ВОГОНЬ"
-		)
+		_hp_armor_label.text = "УКРИТТЯ" if is_in_cover else "ВОГОНЬ"
 
 	var is_slow_reload := is_reloading_now and _is_slow_reloading()
 	if _ammo_bar_main:
@@ -1486,4 +1527,3 @@ class _HudBarTicks extends Control:
 			draw_line(Vector2(x, 0.0), Vector2(x, 6.0), Color(0.04, 0.04, 0.05, 0.55), 1.5)
 			draw_line(Vector2(x, size.y - 6.0), Vector2(x, size.y), Color(0.04, 0.04, 0.05, 0.55), 1.5)
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.02, 0.03, 0.85), false, 1.5)
-

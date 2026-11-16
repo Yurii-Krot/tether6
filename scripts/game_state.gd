@@ -4,6 +4,8 @@ extends RefCounted
 const TOTAL_LEVELS := 15
 const BOSS_LEVEL := 10
 const MAX_UPGRADE_LEVEL := 5
+const MAX_ARMOR_UPGRADE_LEVEL := 6
+const MAX_WEAPON_UPGRADE_LEVEL := 6
 const BASE_UPGRADE_COST := 50
 
 static var current_level: int = 1
@@ -29,10 +31,7 @@ static var upgrade_levels: Dictionary = {
 	"hp": 0,
 	"damage": 0,
 	"coins": 0,
-	"fire_rate": 0,
-	"mag": 0,
 	"ammo": 0,
-	"armor": 0,
 	"medkit": 0,
 	"grenade": 0,
 }
@@ -87,28 +86,42 @@ static func _set_upgrade_level(upg_key: String, val: int) -> void:
 			upg_coins_level = val
 
 
+static func get_max_upgrade_level(upg_key: String) -> int:
+	if upg_key == "hp":
+		return MAX_ARMOR_UPGRADE_LEVEL
+	if upg_key == "damage":
+		return MAX_WEAPON_UPGRADE_LEVEL
+	return MAX_UPGRADE_LEVEL
+
+
+static func get_armor_tier() -> int:
+	return 1 + clampi(get_upgrade_level("hp"), 0, MAX_ARMOR_UPGRADE_LEVEL)
+
+
+static func get_weapon_tier() -> int:
+	return 1 + clampi(get_upgrade_level("damage"), 0, MAX_WEAPON_UPGRADE_LEVEL)
+
+
 static func can_upgrade(upg_key: String) -> bool:
-	return get_upgrade_level(upg_key) < MAX_UPGRADE_LEVEL
+	return get_upgrade_level(upg_key) < get_max_upgrade_level(upg_key)
 
 
 static func get_upgrade_cost(upg_key: String) -> int:
 	var lvl := get_upgrade_level(upg_key)
-	if lvl >= MAX_UPGRADE_LEVEL:
+	if lvl >= get_max_upgrade_level(upg_key):
 		return 0
 	var base_cost := BASE_UPGRADE_COST
 	match upg_key:
-		"fire_rate", "armor":
-			base_cost = 55
 		"ammo", "grenade":
 			base_cost = 60
-		"mag", "medkit":
+		"medkit":
 			base_cost = 45
 	return base_cost * (1 << lvl)
 
 
 static func can_buy_upgrade(upg_key: String) -> bool:
 	var lvl := get_upgrade_level(upg_key)
-	if lvl >= MAX_UPGRADE_LEVEL:
+	if lvl >= get_max_upgrade_level(upg_key):
 		return false
 	return coins >= get_upgrade_cost(upg_key)
 
@@ -148,32 +161,12 @@ static func get_player_bullet_damage() -> float:
 	return 10.0 + float(get_upgrade_level("damage")) * 3.0
 
 
-static func get_player_fire_rate() -> float:
-	return 10.0 + float(get_upgrade_level("fire_rate")) * 1.2
-
-
-static func get_player_magazine_size() -> int:
-	return 30 + get_upgrade_level("mag") * 5
-
-
-static func get_player_reload_time() -> float:
-	return maxf(1.5, 3.5 - float(get_upgrade_level("mag")) * 0.30)
-
-
 static func get_player_bullet_speed() -> float:
 	return 1380.0 + float(get_upgrade_level("ammo")) * 130.0
 
 
 static func get_player_crit_chance() -> float:
 	return float(get_upgrade_level("ammo")) * 0.08
-
-
-static func get_player_damage_reduction() -> float:
-	return float(get_upgrade_level("armor")) * 0.06
-
-
-static func get_player_roll_cooldown() -> float:
-	return maxf(0.04, 0.07 - float(get_upgrade_level("armor")) * 0.006)
 
 
 static func get_player_medkit_cooldown() -> float:

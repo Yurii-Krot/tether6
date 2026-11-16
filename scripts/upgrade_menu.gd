@@ -10,16 +10,42 @@ const TEX_SOLDIER_STD := preload("res://assets/player.png")
 const TEX_SOLDIER_GOLD := preload("res://assets/player_shades_gold.png")
 const TEX_SOLDIER_CYBER := preload("res://assets/player_shades_cyber.png")
 const TEX_SOLDIER_BLACK := preload("res://assets/player_shades_black.png")
+const TEX_ARMOR_TIERS: Array[Texture2D] = [
+	preload("res://assets/armor/armor_tier_1.png"),
+	preload("res://assets/armor/armor_tier_2.png"),
+	preload("res://assets/armor/armor_tier_3.png"),
+	preload("res://assets/armor/armor_tier_4.png"),
+	preload("res://assets/armor/armor_tier_5.png"),
+	preload("res://assets/armor/armor_tier_6.png"),
+	preload("res://assets/armor/armor_tier_7.png"),
+]
+const TEX_WEAPON_TIERS: Array[Texture2D] = [
+	preload("res://assets/weapons/weapon_tier_1.png"),
+	preload("res://assets/weapons/weapon_tier_2.png"),
+	preload("res://assets/weapons/weapon_tier_3.png"),
+	preload("res://assets/weapons/weapon_tier_4.png"),
+	preload("res://assets/weapons/weapon_tier_5.png"),
+	preload("res://assets/weapons/weapon_tier_6.png"),
+	preload("res://assets/weapons/weapon_tier_7.png"),
+]
 
 const TEX_ICON_DAMAGE := preload("res://assets/upg_icon_damage.png")
-const TEX_ICON_FIRE_RATE := preload("res://assets/upg_icon_fire_rate.png")
-const TEX_ICON_MAG := preload("res://assets/upg_icon_mag.png")
 const TEX_ICON_AMMO := preload("res://assets/upg_icon_ammo.png")
 const TEX_ICON_HP := preload("res://assets/upg_icon_hp.png")
-const TEX_ICON_ARMOR := preload("res://assets/upg_icon_armor.png")
 const TEX_ICON_MEDKIT := preload("res://assets/upg_icon_medkit.png")
 const TEX_ICON_GRENADE := preload("res://assets/upg_icon_grenade.png")
 const TEX_ICON_COINS := preload("res://assets/upg_icon_coins.png")
+
+const UI_OLIVE := Color(0.608, 0.569, 0.392, 1.0)
+const UI_OLIVE_HI := Color(0.753, 0.714, 0.514, 1.0)
+const UI_OLIVE_LO := Color(0.431, 0.400, 0.255, 1.0)
+const UI_OLIVE_DARK := Color(0.302, 0.282, 0.176, 1.0)
+const UI_INK := Color(0.063, 0.071, 0.082, 1.0)
+const UI_STEEL := Color(0.451, 0.467, 0.431, 1.0)
+const UI_STEEL_HI := Color(0.616, 0.631, 0.592, 1.0)
+const UI_STEEL_LO := Color(0.286, 0.298, 0.271, 1.0)
+const UI_WELL := Color(0.082, 0.090, 0.098, 1.0)
+const UI_TRAY := Color(0.220, 0.235, 0.204, 1.0)
 
 const UPGRADE_DEFS: Array[Dictionary] = [
 	{
@@ -28,65 +54,32 @@ const UPGRADE_DEFS: Array[Dictionary] = [
 		"title": "Важкий Нарізний Ствол",
 		"category": "weapon",
 		"category_label": "МОДУЛЬ ЗБРОЇ",
-		"desc": "Посилений хромований ствол і дульне гальмо збільшують пробивну силу кожної кулі штурмової гвинтівки.",
+		"desc": "Послідовне покращення штурмової гвинтівки (7 рівнів модифікації): відкриває тактичні обвіси, глушник, оптику, барабанний магазин і +3 урону за рівень.",
 		"accent": Color(0.94, 0.56, 0.24, 1.0),
-		"part_uv": Vector2(0.84, 0.48),
-		"part_name": "ДУЛЬНИЙ ЗРІЗ",
-	},
-	{
-		"key": "fire_rate",
-		"short_title": "БОЙОВИЙ ЗАТВОР",
-		"title": "Полегшений Бойовий Затвор",
-		"category": "weapon",
-		"category_label": "МОДУЛЬ ЗБРОЇ",
-		"desc": "Модернізована газова автоматика та титановий затвор підвищують скорострільність автомата в бою.",
-		"accent": Color(0.96, 0.76, 0.28, 1.0),
-		"part_uv": Vector2(0.56, 0.43),
-		"part_name": "СТВОЛЬНА КОРОБКА",
-	},
-	{
-		"key": "mag",
-		"short_title": "ШТУРМ-МАГАЗИН",
-		"title": "Спарений Штурмовий Магазин",
-		"category": "weapon",
-		"category_label": "МОДУЛЬ ЗБРОЇ",
-		"desc": "Збільшує ємність магазина та пришвидшує тактичну перезарядку в укритті.",
-		"accent": Color(0.84, 0.72, 0.42, 1.0),
-		"part_uv": Vector2(0.54, 0.53),
-		"part_name": "МАГАЗИН",
+		"part_uv": Vector2(0.56, 0.45),
+		"part_name": "ОЗБРОЄННЯ",
 	},
 	{
 		"key": "ammo",
-		"short_title": "ЕКСПАНСИВНІ",
-		"title": "Експансивні Бронебійні Набої",
+		"short_title": "ПОЛІПШЕНІ ПАТРОНИ",
+		"title": "Поліпшені Бронебійні Патрони",
 		"category": "weapon",
 		"category_label": "МОДУЛЬ ЗБРОЇ",
 		"desc": "Високошвидкісні кулі з вольфрамовим осердям: вища швидкість польоту та шанс критичного пострілу (x1.75 урону).",
 		"accent": Color(0.96, 0.44, 0.30, 1.0),
-		"part_uv": Vector2(0.68, 0.45),
-		"part_name": "ПАТРОННИК І ПРИЦІЛ",
+		"part_uv": Vector2(0.52, 0.37),
+		"part_name": "БОЄКОМПЛЕКТ",
 	},
 	{
 		"key": "hp",
 		"short_title": "ТИТАН-БРОНЯ",
-		"title": "Титановий Бронежилет (HP)",
+		"title": "Комплект Броні (HP)",
 		"category": "defense",
 		"category_label": "МОДУЛЬ ЗАХИСТУ",
-		"desc": "Керамічні бронеплити класу IV значно збільшують максимальний запас здоров'я оперативника.",
+		"desc": "Послідовне покращення тактичної броні оперативника (7 рівнів спорядження): кожен рівень збільшує запас здоров'я на +25 HP.",
 		"accent": Color(0.90, 0.34, 0.30, 1.0),
-		"part_uv": Vector2(0.45, 0.37),
-		"part_name": "НАГРУДНА ПЛИТА",
-	},
-	{
-		"key": "armor",
-		"short_title": "КЕВЛАР-ЩИТ",
-		"title": "Кевларовий Підбій та Розвантаження",
-		"category": "defense",
-		"category_label": "МОДУЛЬ ЗАХИСТУ",
-		"desc": "Поглинає частину вхідного урону від куль і вибухів та зменшує паузу між перекатами в окопі.",
-		"accent": Color(0.44, 0.72, 0.92, 1.0),
-		"part_uv": Vector2(0.43, 0.16),
-		"part_name": "ШОЛОМ І ЗАХИСТ",
+		"part_uv": Vector2(0.50, 0.31),
+		"part_name": "БРОНЕКОМПЛЕКТ",
 	},
 	{
 		"key": "medkit",
@@ -96,7 +89,7 @@ const UPGRADE_DEFS: Array[Dictionary] = [
 		"category_label": "ТАКТИЧНИЙ МОДУЛЬ",
 		"desc": "Бойові стимулятори скорочують час відновлення аптечки для швидкого порятунку під вогнем.",
 		"accent": Color(0.38, 0.84, 0.54, 1.0),
-		"part_uv": Vector2(0.34, 0.56),
+		"part_uv": Vector2(0.44, 0.42),
 		"part_name": "МЕД-ПІДСУМОК",
 	},
 	{
@@ -107,8 +100,8 @@ const UPGRADE_DEFS: Array[Dictionary] = [
 		"category_label": "ТАКТИЧНИЙ МОДУЛЬ",
 		"desc": "Посилений заряд вибухівки збільшує урон гранати та пришвидшує підготовку наступного кидка.",
 		"accent": Color(0.94, 0.52, 0.24, 1.0),
-		"part_uv": Vector2(0.62, 0.51),
-		"part_name": "ПІДСТВОЛЬНИК / ГРАНАТИ",
+		"part_uv": Vector2(0.54, 0.48),
+		"part_name": "ТАКТИЧНИЙ ПОЯС",
 	},
 	{
 		"key": "coins",
@@ -118,7 +111,7 @@ const UPGRADE_DEFS: Array[Dictionary] = [
 		"category_label": "ТАКТИЧНИЙ МОДУЛЬ",
 		"desc": "Автоматичний збір цінних даних і трофеїв збільшує кількість монет за кожного знищеного ворога.",
 		"accent": Color(0.96, 0.80, 0.30, 1.0),
-		"part_uv": Vector2(0.22, 0.30),
+		"part_uv": Vector2(0.32, 0.25),
 		"part_name": "РАДІОРАНЕЦЬ",
 	},
 ]
@@ -170,6 +163,7 @@ var _sfx_skin: AudioStreamWAV = null
 var _sfx_error: AudioStreamWAV = null
 
 var _back_button: TextureButton = null
+var _dev_add_coins_button: Button = null
 
 
 func _ready() -> void:
@@ -180,6 +174,7 @@ func _ready() -> void:
 	_init_audio()
 	_setup_chassis_and_zones()
 	_setup_back_button()
+	_setup_dev_test_controls()
 	_refresh_ui()
 
 	next_button.pressed.connect(_on_next_pressed)
@@ -204,11 +199,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _get_icon_texture(key: String) -> Texture2D:
 	match key:
 		"damage": return TEX_ICON_DAMAGE
-		"fire_rate": return TEX_ICON_FIRE_RATE
-		"mag": return TEX_ICON_MAG
 		"ammo": return TEX_ICON_AMMO
 		"hp": return TEX_ICON_HP
-		"armor": return TEX_ICON_ARMOR
 		"medkit": return TEX_ICON_MEDKIT
 		"grenade": return TEX_ICON_GRENADE
 		"coins": return TEX_ICON_COINS
@@ -230,41 +222,65 @@ func _get_skin_texture(skin_id: String) -> Texture2D:
 		_: return TEX_SOLDIER_STD
 
 
+func _get_armor_tier_texture(tier: int) -> Texture2D:
+	var idx := clampi(tier - 1, 0, TEX_ARMOR_TIERS.size() - 1)
+	return TEX_ARMOR_TIERS[idx]
+
+
+func _get_weapon_tier_texture(tier: int) -> Texture2D:
+	var idx := clampi(tier - 1, 0, TEX_WEAPON_TIERS.size() - 1)
+	return TEX_WEAPON_TIERS[idx]
+
+
 # ── Побудова 3-зонного інтерфейсу «Тактичний Арсенал» ────────────────────────
 
 func _setup_chassis_and_zones() -> void:
 	upgrades_container.visible = false
 	earned_label.visible = false
 
-	# Металева рамка головного вікна з заклепками
-	var main_bevel := _BevelPanelCanvas.new()
-	main_bevel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	main_bevel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	main_bevel.border_color = Color(0.74, 0.63, 0.38, 1.0)
-	main_bevel.bg_color = Color(0.08, 0.09, 0.11, 0.0)
-	main_bevel.draw_rivets = true
-	panel_frame.add_child(main_bevel)
+	# Прозорий фон-обгортка та злегка приглушений задній план окопів, щоб термінал виділявся об'ємом
+	var dark_bg := get_node_or_null("DarkBackdrop") as ColorRect
+	if dark_bg != null:
+		dark_bg.color = Color(0.03, 0.04, 0.045, 0.54)
 
-	# Налаштування верхньої шапки без налізання тексту (без перемикача ВІЗОР)
-	level_label.position = Vector2(18, 9)
-	level_label.size = Vector2(390, 40)
-	level_label.add_theme_font_size_override("font_size", 19)
+	panel_frame.clip_contents = false
+	panel_frame.color = Color(0.0, 0.0, 0.0, 0.0)
+	header_bar.color = Color(0.0, 0.0, 0.0, 0.0)
+	body_box.color = Color(0.0, 0.0, 0.0, 0.0)
 
-	title_label.position = Vector2(440, 9)
-	title_label.size = Vector2(340, 40)
+	# Головне оливково-латунне шасі терміналу з шестернями, аркою заголовка, заклепками та сканлайнами
+	var console_chassis := _ConsoleChassisCanvas.new()
+	console_chassis.position = Vector2.ZERO
+	console_chassis.size = Vector2(1232.0, 606.0)
+	console_chassis.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel_frame.add_child(console_chassis)
+	panel_frame.move_child(console_chassis, 0)
+
+	# Верхня шапка: зліва рівень, у центрі CRT-арка назви, справа монети + іконка
+	level_label.position = Vector2(28, 12)
+	level_label.size = Vector2(364, 42)
+	level_label.add_theme_font_size_override("font_size", 18)
+	level_label.add_theme_color_override("font_color", Color(0.96, 0.94, 0.86, 1.0))
+
+	title_label.position = Vector2(418, -4)
+	title_label.size = Vector2(396, 56)
 	title_label.text = "ТАКТИЧНИЙ АРСЕНАЛ"
-	title_label.add_theme_font_size_override("font_size", 22)
+	title_label.add_theme_font_size_override("font_size", 26)
+	title_label.add_theme_color_override("font_color", Color(0.96, 0.96, 0.94, 1.0))
 
-	coins_label.position = Vector2(930, 6)
-	coins_label.size = Vector2(272, 28)
+	coins_label.position = Vector2(936, 9)
+	coins_label.size = Vector2(256, 28)
 	coins_label.add_theme_font_size_override("font_size", 21)
+	coins_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.34, 1.0))
 
 	_earned_header_badge = Label.new()
-	_earned_header_badge.position = Vector2(930, 32)
-	_earned_header_badge.size = Vector2(272, 20)
+	_earned_header_badge.position = Vector2(936, 33)
+	_earned_header_badge.size = Vector2(256, 20)
 	_earned_header_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_earned_header_badge.add_theme_font_size_override("font_size", 12)
-	_earned_header_badge.add_theme_color_override("font_color", Color(0.58, 0.92, 0.62, 0.95))
+	_earned_header_badge.add_theme_color_override("font_color", Color(0.58, 0.95, 0.62, 0.98))
+	_earned_header_badge.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.92))
+	_earned_header_badge.add_theme_constant_override("outline_size", 3)
 	header_bar.add_child(_earned_header_badge)
 
 	# ── 1. ЛІВА ЗОНА: ОПЕРАТИВНИК З АВТОМАТОМ + СКІНИ ОКУЛЯРІВ (x=12..324) ──
@@ -273,73 +289,65 @@ func _setup_chassis_and_zones() -> void:
 	left_zone.size = Vector2(312, 510)
 	body_box.add_child(left_zone)
 
-	var left_bevel := _BevelPanelCanvas.new()
-	left_bevel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	left_bevel.bg_color = Color(0.075, 0.085, 0.10, 0.98)
-	left_bevel.border_color = Color(0.56, 0.48, 0.30, 0.95)
-	left_bevel.draw_rivets = true
-	left_zone.add_child(left_bevel)
+	var left_plate := _ZonePlateCanvas.new()
+	left_plate.set_anchors_preset(Control.PRESET_FULL_RECT)
+	left_plate.title_text = "ОПЕРАТИВНИК"
+	left_plate.title_width = 164.0
+	left_zone.add_child(left_plate)
 
-	var op_header := Label.new()
-	op_header.position = Vector2(14, 8)
-	op_header.size = Vector2(284, 22)
-	op_header.text = "ОПЕРАТИВНИК // ОГЛЯД СПОРЯДЖЕННЯ"
-	op_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	op_header.add_theme_font_size_override("font_size", 13)
-	op_header.add_theme_color_override("font_color", Color(0.86, 0.76, 0.48))
-	left_zone.add_child(op_header)
-
-	# Інтерактивна вітрина бійця з автоматом
+	# Інтерактивна вітрина бійця з автоматом (повний непрозорий колір бійця)
 	_showcase_canvas = _SoldierShowcaseCanvas.new()
 	_showcase_canvas.position = Vector2(12, 34)
-	_showcase_canvas.size = Vector2(288, 252)
+	_showcase_canvas.size = Vector2(288, 250)
 	left_zone.add_child(_showcase_canvas)
 
 	# Панель вибору скіна (Окуляри / Шолом)
 	var skin_title := Label.new()
-	skin_title.position = Vector2(12, 292)
+	skin_title.position = Vector2(12, 290)
 	skin_title.size = Vector2(288, 18)
 	skin_title.text = "СКІН БІЙЦЯ (ТАКТИЧНІ ОКУЛЯРИ):"
 	skin_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	skin_title.add_theme_font_size_override("font_size", 12)
-	skin_title.add_theme_color_override("font_color", Color(0.82, 0.78, 0.66))
+	skin_title.add_theme_font_size_override("font_size", 11)
+	skin_title.add_theme_color_override("font_color", Color(0.95, 0.93, 0.84))
+	skin_title.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.07, 0.95))
+	skin_title.add_theme_constant_override("outline_size", 3)
 	left_zone.add_child(skin_title)
 
 	var skin_row := HBoxContainer.new()
-	skin_row.position = Vector2(10, 312)
+	skin_row.position = Vector2(10, 310)
 	skin_row.size = Vector2(292, 32)
 	skin_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	skin_row.add_theme_constant_override("separation", 4)
 	left_zone.add_child(skin_row)
 
 	var skins_meta := [
-		{"id": "shades_gold", "label": "🕶 ЗОЛОТІ"},
-		{"id": "shades_cyber", "label": "🕶 КІБЕР"},
-		{"id": "shades_black", "label": "🕶 ЧОРНІ"},
-		{"id": "standard", "label": "🪖 ШОЛОМ"},
+		{"id": "shades_gold", "label": "ЗОЛОТІ"},
+		{"id": "shades_cyber", "label": "КІБЕР"},
+		{"id": "shades_black", "label": "ЧОРНІ"},
+		{"id": "standard", "label": "ШОЛОМ"},
 	]
 	for sm in skins_meta:
-		var sbtn := _make_tactical_pill_button(String(sm["label"]), Vector2(69, 29), 11)
 		var sid := String(sm["id"])
+		var sbtn := _make_tactical_pill_button(String(sm["label"]), Vector2(70, 30), 11, 18)
+		var mini_icon := _SkinMiniIcon.new()
+		mini_icon.skin_id = sid
+		mini_icon.position = Vector2(5, 7)
+		mini_icon.size = Vector2(15, 16)
+		mini_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sbtn.add_child(mini_icon)
 		sbtn.pressed.connect(_on_skin_selected.bind(sid))
 		skin_row.add_child(sbtn)
 		_skin_buttons[sid] = sbtn
 
-	# Зведення бойових характеристик бійця (зі стилізованим повзунком прокрутки)
-	var stats_bg := ColorRect.new()
-	stats_bg.position = Vector2(12, 348)
-	stats_bg.size = Vector2(288, 150)
-	stats_bg.color = Color(0.045, 0.052, 0.064, 0.96)
-	left_zone.add_child(stats_bg)
-
-	var stats_border := ReferenceRect.new()
-	stats_border.position = Vector2(12, 348)
-	stats_border.size = Vector2(288, 150)
-	stats_border.border_color = Color(0.46, 0.40, 0.26, 0.85)
-	stats_border.border_width = 1.5
-	stats_border.editor_only = false
-	stats_border.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	left_zone.add_child(stats_border)
+	# Зведення бойових характеристик бійця (у заглибленому екрані з латунним повзунком)
+	var stats_well := _RoundedWellCanvas.new()
+	stats_well.position = Vector2(12, 348)
+	stats_well.size = Vector2(288, 150)
+	stats_well.bg_color = Color(0.086, 0.094, 0.106, 0.98)
+	stats_well.border_color = Color(0.06, 0.07, 0.08, 1.0)
+	stats_well.accent_rim_color = Color(0.56, 0.50, 0.34, 0.72)
+	stats_well.corner_radius = 8
+	left_zone.add_child(stats_well)
 
 	_stats_summary_label = RichTextLabel.new()
 	_stats_summary_label.position = Vector2(18, 353)
@@ -359,45 +367,53 @@ func _setup_chassis_and_zones() -> void:
 	center_zone.size = Vector2(492, 510)
 	body_box.add_child(center_zone)
 
-	var center_bevel := _BevelPanelCanvas.new()
-	center_bevel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center_bevel.bg_color = Color(0.085, 0.095, 0.112, 0.98)
-	center_bevel.border_color = Color(0.58, 0.50, 0.32, 0.95)
-	center_bevel.draw_rivets = true
-	center_zone.add_child(center_bevel)
+	var center_plate := _ZonePlateCanvas.new()
+	center_plate.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center_plate.title_text = ""
+	center_zone.add_child(center_plate)
+
+	# Заглиблена рамка панелі фільтрів
+	var cat_well := _RoundedWellCanvas.new()
+	cat_well.position = Vector2(12, 10)
+	cat_well.size = Vector2(468, 38)
+	cat_well.bg_color = Color(0.11, 0.12, 0.11, 0.96)
+	cat_well.border_color = Color(0.06, 0.07, 0.08, 1.0)
+	cat_well.accent_rim_color = Color(0.54, 0.50, 0.36, 0.72)
+	cat_well.corner_radius = 8
+	center_zone.add_child(cat_well)
 
 	# Панель категорій-фільтрів зверху центральної зони
 	var cat_bar := HBoxContainer.new()
-	cat_bar.position = Vector2(12, 10)
-	cat_bar.size = Vector2(468, 34)
+	cat_bar.position = Vector2(15, 13)
+	cat_bar.size = Vector2(462, 32)
 	cat_bar.alignment = BoxContainer.ALIGNMENT_CENTER
-	cat_bar.add_theme_constant_override("separation", 6)
+	cat_bar.add_theme_constant_override("separation", 5)
 	center_zone.add_child(cat_bar)
 
 	var cats_meta := [
-		{"id": "all", "label": "ВСІ [9]"},
-		{"id": "weapon", "label": "ЗБРОЯ [4]"},
-		{"id": "defense", "label": "ЗАХИСТ [2]"},
+		{"id": "all", "label": "ВСІ [6]"},
+		{"id": "weapon", "label": "ЗБРОЯ [2]"},
+		{"id": "defense", "label": "ЗАХИСТ [1]"},
 		{"id": "tactics", "label": "ТАКТИКА [3]"},
 		{"id": "affordable", "label": "ДОСТУПНІ [$]"},
 	]
 	for cm in cats_meta:
-		var cbtn := _make_tactical_pill_button(String(cm["label"]), Vector2(88, 32), 12)
+		var cbtn := _make_tactical_pill_button(String(cm["label"]), Vector2(88, 30), 12)
 		var cid := String(cm["id"])
 		cbtn.pressed.connect(_on_category_filter_selected.bind(cid))
 		cat_bar.add_child(cbtn)
 		_cat_buttons[cid] = cbtn
 
-	# Сітка 3x3 іконок характеристик
+	# Сітка 3x2 іконок характеристик (більші об'ємні картки для 6 модулів)
 	var grid_root := Control.new()
-	grid_root.position = Vector2(14, 52)
-	grid_root.size = Vector2(464, 446)
+	grid_root.position = Vector2(14, 62)
+	grid_root.size = Vector2(464, 434)
 	center_zone.add_child(grid_root)
 
 	var tile_w := 148.0
-	var tile_h := 142.0
+	var tile_h := 204.0
 	var gap_x := 10.0
-	var gap_y := 9.0
+	var gap_y := 14.0
 
 	for idx in range(UPGRADE_DEFS.size()):
 		var def: Dictionary = UPGRADE_DEFS[idx]
@@ -420,71 +436,68 @@ func _setup_chassis_and_zones() -> void:
 	right_zone.size = Vector2(372, 510)
 	body_box.add_child(right_zone)
 
-	_insp_accent_frame = _BevelPanelCanvas.new()
-	_insp_accent_frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_insp_accent_frame.bg_color = Color(0.075, 0.085, 0.102, 0.98)
-	_insp_accent_frame.border_color = Color(0.68, 0.56, 0.34, 0.98)
-	_insp_accent_frame.draw_rivets = true
-	right_zone.add_child(_insp_accent_frame)
+	var right_plate := _ZonePlateCanvas.new()
+	right_plate.set_anchors_preset(Control.PRESET_FULL_RECT)
+	right_plate.title_text = "ІНСПЕКТОР ХАРАКТЕРИСТИКИ"
+	right_plate.title_width = 236.0
+	right_zone.add_child(right_plate)
+	_insp_accent_frame = null
 
-	var insp_header := Label.new()
-	insp_header.position = Vector2(14, 8)
-	insp_header.size = Vector2(344, 20)
-	insp_header.text = "ІНСПЕКТОР ХАРАКТЕРИСТИКИ"
-	insp_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	insp_header.add_theme_font_size_override("font_size", 13)
-	insp_header.add_theme_color_override("font_color", Color(0.86, 0.76, 0.48))
-	right_zone.add_child(insp_header)
-
-	# Верхній блок інспектора: велика іконка + категорія + назва
-	var icon_well := ColorRect.new()
+	# Верхній блок інспектора: уніфіковане заглиблене гніздо іконки з золотою восьмикутною рамкою
+	var icon_well := _UniformSocketCanvas.new()
 	icon_well.position = Vector2(16, 36)
 	icon_well.size = Vector2(96, 96)
-	icon_well.color = Color(0.04, 0.045, 0.055, 0.95)
 	right_zone.add_child(icon_well)
 
 	_insp_icon_rect = TextureRect.new()
-	_insp_icon_rect.position = Vector2(20, 40)
-	_insp_icon_rect.size = Vector2(88, 88)
+	_insp_icon_rect.position = Vector2(28, 48)
+	_insp_icon_rect.size = Vector2(72, 72)
 	_insp_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_insp_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	right_zone.add_child(_insp_icon_rect)
 
 	_insp_cat_label = Label.new()
-	_insp_cat_label.position = Vector2(122, 38)
-	_insp_cat_label.size = Vector2(236, 20)
+	_insp_cat_label.position = Vector2(124, 38)
+	_insp_cat_label.size = Vector2(232, 20)
 	_insp_cat_label.add_theme_font_size_override("font_size", 12)
-	_insp_cat_label.add_theme_color_override("font_color", Color(0.92, 0.72, 0.34))
+	_insp_cat_label.add_theme_color_override("font_color", Color(0.95, 0.78, 0.36))
+	_insp_cat_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.07, 0.95))
+	_insp_cat_label.add_theme_constant_override("outline_size", 3)
 	right_zone.add_child(_insp_cat_label)
 
 	_insp_title_label = Label.new()
-	_insp_title_label.position = Vector2(122, 58)
-	_insp_title_label.size = Vector2(236, 52)
+	_insp_title_label.position = Vector2(124, 58)
+	_insp_title_label.size = Vector2(232, 52)
 	_insp_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_insp_title_label.add_theme_font_size_override("font_size", 18)
-	_insp_title_label.add_theme_color_override("font_color", Color(0.96, 0.93, 0.85))
-	_insp_title_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_insp_title_label.add_theme_color_override("font_color", Color(0.98, 0.96, 0.90))
+	_insp_title_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.07, 0.95))
 	_insp_title_label.add_theme_constant_override("outline_size", 4)
 	right_zone.add_child(_insp_title_label)
 
 	_insp_lvl_label = Label.new()
-	_insp_lvl_label.position = Vector2(122, 110)
-	_insp_lvl_label.size = Vector2(236, 22)
+	_insp_lvl_label.position = Vector2(124, 110)
+	_insp_lvl_label.size = Vector2(232, 22)
 	_insp_lvl_label.add_theme_font_size_override("font_size", 14)
-	_insp_lvl_label.add_theme_color_override("font_color", Color(0.75, 0.85, 0.98))
+	_insp_lvl_label.add_theme_color_override("font_color", Color(0.84, 0.92, 0.98))
+	_insp_lvl_label.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.07, 0.95))
+	_insp_lvl_label.add_theme_constant_override("outline_size", 3)
 	right_zone.add_child(_insp_lvl_label)
 
-	# 5-сегментна інтерактивна шкала рівня в стилі Peacekeeper + Tether6
+	# 5-сегментна інтерактивна шкала рівня в стилі броньованої консолі
 	_insp_segments_canvas = _LevelSegmentsCanvas.new()
 	_insp_segments_canvas.position = Vector2(16, 142)
-	_insp_segments_canvas.size = Vector2(340, 34)
+	_insp_segments_canvas.size = Vector2(340, 36)
 	right_zone.add_child(_insp_segments_canvas)
 
 	# Опис модуля
-	var desc_well := ColorRect.new()
+	var desc_well := _RoundedWellCanvas.new()
 	desc_well.position = Vector2(16, 186)
 	desc_well.size = Vector2(340, 96)
-	desc_well.color = Color(0.045, 0.052, 0.064, 0.92)
+	desc_well.bg_color = Color(0.09, 0.098, 0.108, 0.97)
+	desc_well.border_color = Color(0.06, 0.07, 0.08, 1.0)
+	desc_well.accent_rim_color = Color(0.46, 0.44, 0.34, 0.65)
+	desc_well.corner_radius = 8
 	right_zone.add_child(desc_well)
 
 	_insp_desc_label = Label.new()
@@ -492,41 +505,44 @@ func _setup_chassis_and_zones() -> void:
 	_insp_desc_label.size = Vector2(320, 80)
 	_insp_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_insp_desc_label.add_theme_font_size_override("font_size", 14)
-	_insp_desc_label.add_theme_color_override("font_color", Color(0.84, 0.82, 0.75))
+	_insp_desc_label.add_theme_color_override("font_color", Color(0.88, 0.87, 0.80))
 	right_zone.add_child(_insp_desc_label)
 
 	# Порівняння показників: Поточний -> Наступний рівень
-	var stat_box := ColorRect.new()
-	stat_box.position = Vector2(16, 292)
-	stat_box.size = Vector2(340, 108)
-	stat_box.color = Color(0.05, 0.06, 0.075, 0.96)
+	var stat_box := _RoundedWellCanvas.new()
+	stat_box.position = Vector2(16, 290)
+	stat_box.size = Vector2(340, 110)
+	stat_box.bg_color = Color(0.09, 0.098, 0.108, 0.97)
+	stat_box.border_color = Color(0.06, 0.07, 0.08, 1.0)
+	stat_box.accent_rim_color = Color(0.46, 0.44, 0.34, 0.65)
+	stat_box.corner_radius = 8
 	right_zone.add_child(stat_box)
 
 	var stat_hdr := Label.new()
-	stat_hdr.position = Vector2(26, 298)
+	stat_hdr.position = Vector2(26, 297)
 	stat_hdr.size = Vector2(320, 20)
 	stat_hdr.text = "БОЙОВА ЕФЕКТИВНІСТЬ МОДУЛЯ:"
 	stat_hdr.add_theme_font_size_override("font_size", 12)
-	stat_hdr.add_theme_color_override("font_color", Color(0.76, 0.70, 0.54))
+	stat_hdr.add_theme_color_override("font_color", Color(0.84, 0.78, 0.58))
 	right_zone.add_child(stat_hdr)
 
 	_insp_stat_curr_label = Label.new()
-	_insp_stat_curr_label.position = Vector2(26, 322)
+	_insp_stat_curr_label.position = Vector2(26, 321)
 	_insp_stat_curr_label.size = Vector2(320, 32)
 	_insp_stat_curr_label.add_theme_font_size_override("font_size", 15)
-	_insp_stat_curr_label.add_theme_color_override("font_color", Color(0.92, 0.90, 0.84))
+	_insp_stat_curr_label.add_theme_color_override("font_color", Color(0.95, 0.94, 0.88))
 	right_zone.add_child(_insp_stat_curr_label)
 
 	_insp_stat_next_label = Label.new()
-	_insp_stat_next_label.position = Vector2(26, 356)
+	_insp_stat_next_label.position = Vector2(26, 355)
 	_insp_stat_next_label.size = Vector2(320, 36)
 	_insp_stat_next_label.add_theme_font_size_override("font_size", 16)
 	_insp_stat_next_label.add_theme_color_override("font_color", Color(0.48, 0.96, 0.58))
 	right_zone.add_child(_insp_stat_next_label)
 
-	# Велика тактична кнопка КУПИТИ МОДУЛЬ
+	# Велика тактична кнопка КУПИТИ МОДУЛЬ з заклепками та відблиском
 	_insp_buy_button = Button.new()
-	_insp_buy_button.position = Vector2(16, 414)
+	_insp_buy_button.position = Vector2(16, 412)
 	_insp_buy_button.size = Vector2(340, 62)
 	_insp_buy_button.focus_mode = Control.FOCUS_NONE
 	_insp_buy_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -536,13 +552,20 @@ func _setup_chassis_and_zones() -> void:
 	_insp_buy_button.pressed.connect(_on_buy_selected_pressed)
 	right_zone.add_child(_insp_buy_button)
 
+	var buy_decor := _BuyButtonDecor.new()
+	buy_decor.set_anchors_preset(Control.PRESET_FULL_RECT)
+	buy_decor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_insp_buy_button.add_child(buy_decor)
+
 	var hint_lbl := Label.new()
 	hint_lbl.position = Vector2(16, 480)
 	hint_lbl.size = Vector2(340, 22)
 	hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint_lbl.text = "Подвійний клік по іконці або [Enter] — швидка купівля"
 	hint_lbl.add_theme_font_size_override("font_size", 11)
-	hint_lbl.add_theme_color_override("font_color", Color(0.60, 0.58, 0.50))
+	hint_lbl.add_theme_color_override("font_color", Color(0.86, 0.84, 0.74))
+	hint_lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.07, 0.9))
+	hint_lbl.add_theme_constant_override("outline_size", 3)
 	right_zone.add_child(hint_lbl)
 
 	# ── 4. ПОВНОЕКРАННИЙ ВІЗУАЛЬНИЙ ФІЛЬТР (БУНКЕР / ТЕПЛОВІЗОР / НВБ / РАДАР) ──
@@ -553,38 +576,42 @@ func _setup_chassis_and_zones() -> void:
 	move_child(fade_overlay, get_child_count() - 1)
 
 
-func _make_tactical_pill_button(txt: String, min_sz: Vector2, font_sz: int) -> Button:
+func _make_tactical_pill_button(txt: String, min_sz: Vector2, font_sz: int, left_pad: int = 0) -> Button:
 	var btn := Button.new()
 	btn.custom_minimum_size = min_sz
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	btn.text = txt
+	btn.set_meta("_left_pad", left_pad)
 	btn.add_theme_font_size_override("font_size", font_sz)
-	btn.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	btn.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.92))
 	btn.add_theme_constant_override("outline_size", 3)
 	return btn
 
 
 func _style_pill_button(btn: Button, active: bool, accent: Color = Color(0.86, 0.74, 0.42)) -> void:
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.22, 0.20, 0.14, 0.98) if active else Color(0.12, 0.13, 0.16, 0.95)
+	normal.bg_color = Color(0.32, 0.29, 0.18, 0.98) if active else Color(0.16, 0.17, 0.16, 0.96)
 	normal.border_width_left = 2
 	normal.border_width_top = 2
 	normal.border_width_right = 2
 	normal.border_width_bottom = 2
-	normal.border_color = accent if active else Color(0.38, 0.35, 0.26, 0.85)
-	normal.set_corner_radius_all(5)
+	normal.border_color = accent if active else Color(0.06, 0.07, 0.08, 0.95)
+	normal.set_corner_radius_all(6)
+	var left_pad := int(btn.get_meta("_left_pad", 0))
+	if left_pad > 0:
+		normal.content_margin_left = float(left_pad)
 
 	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color = normal.bg_color.lightened(0.12)
-	hover.border_color = accent.lightened(0.2)
+	hover.bg_color = normal.bg_color.lightened(0.14)
+	hover.border_color = accent.lightened(0.18)
 
 	btn.add_theme_stylebox_override("normal", normal)
 	btn.add_theme_stylebox_override("hover", hover)
 	btn.add_theme_stylebox_override("pressed", hover)
 	btn.add_theme_color_override(
 		"font_color",
-		Color(1.0, 0.95, 0.78) if active else Color(0.78, 0.76, 0.70)
+		Color(1.0, 0.95, 0.76) if active else Color(0.86, 0.85, 0.78)
 	)
 
 
@@ -640,16 +667,40 @@ func _refresh_ui() -> void:
 		var sbtn: Button = _skin_buttons[sid]
 		_style_pill_button(sbtn, GAME_STATE.hero_skin == sid, Color(0.95, 0.78, 0.32))
 
-	# Оновлюємо вітрину бійця з автоматом
+	# Оновлюємо вітрину бійця: прев'ю наступної броні ("hp") або прев'ю наступної модифікації зброї ("damage") до покупки!
 	var inspect_key := _hovered_key if not _hovered_key.is_empty() else _selected_key
 	var inspect_def := _get_def(inspect_key)
+	var equipped_tier := GAME_STATE.get_armor_tier()
+	var max_armor_tier := 1 + GAME_STATE.get_max_upgrade_level("hp")
+	var is_armor_preview := (inspect_key == "hp") and (equipped_tier < max_armor_tier)
+	var display_tier := (equipped_tier + 1) if is_armor_preview else equipped_tier
+
+	var equipped_weapon_tier := GAME_STATE.get_weapon_tier()
+	var max_weapon_tier := 1 + GAME_STATE.get_max_upgrade_level("damage")
+	var is_weapon_preview := (inspect_key == "damage") and (equipped_weapon_tier < max_weapon_tier)
+	var display_weapon_tier := (equipped_weapon_tier + 1) if is_weapon_preview else equipped_weapon_tier
+
 	if _showcase_canvas != null:
-		_showcase_canvas.soldier_tex = _get_skin_texture(GAME_STATE.hero_skin)
+		_showcase_canvas.soldier_tex = _get_armor_tier_texture(display_tier)
+		_showcase_canvas.weapon_tex = _get_weapon_tier_texture(display_weapon_tier)
 		_showcase_canvas.skin_id = GAME_STATE.hero_skin
 		_showcase_canvas.filter_mode = GAME_STATE.visual_filter
+		_showcase_canvas.armor_tier = equipped_tier
+		_showcase_canvas.display_tier = display_tier
+		_showcase_canvas.is_armor_preview = is_armor_preview
+		_showcase_canvas.weapon_tier = equipped_weapon_tier
+		_showcase_canvas.weapon_display_tier = display_weapon_tier
+		_showcase_canvas.is_weapon_preview = is_weapon_preview
 		_showcase_canvas.highlight_uv = inspect_def["part_uv"]
-		_showcase_canvas.highlight_label = String(inspect_def["part_name"])
-		_showcase_canvas.highlight_color = inspect_def["accent"]
+		if is_armor_preview:
+			_showcase_canvas.highlight_label = "ПРЕВ'Ю: БРОНЯ РІВ.%d" % display_tier
+			_showcase_canvas.highlight_color = Color(0.98, 0.80, 0.28)
+		elif is_weapon_preview:
+			_showcase_canvas.highlight_label = "ПРЕВ'Ю: ЗБРОЯ РІВ.%d" % display_weapon_tier
+			_showcase_canvas.highlight_color = Color(0.98, 0.72, 0.28)
+		else:
+			_showcase_canvas.highlight_label = String(inspect_def["part_name"])
+			_showcase_canvas.highlight_color = inspect_def["accent"]
 		_showcase_canvas.queue_redraw()
 
 	# Оновлюємо зведення характеристик під бійцем
@@ -661,18 +712,16 @@ func _refresh_ui() -> void:
 			skin_name = "Чорні // ВЕНОМ"
 		elif GAME_STATE.hero_skin == "standard":
 			skin_name = "Стандартний Шолом"
-		var dps := float(GAME_STATE.get_player_bullet_damage()) * GAME_STATE.get_player_fire_rate()
+		var dps := float(GAME_STATE.get_player_bullet_damage()) * 10.0
 		var crit_pct := int(round(GAME_STATE.get_player_crit_chance() * 100.0))
-		var armor_pct := int(round(GAME_STATE.get_player_damage_reduction() * 100.0))
 		var coin_pct := int(round((GAME_STATE.get_coin_multiplier() - 1.0) * 100.0))
 		_stats_summary_label.text = (
 			"[color=#dfc478][b]ЗВЕДЕННЯ ОПЕРАТИВНИКА[/b][/color]\n[color=#8fa4b8]Скін: %s[/color]\n" % skin_name
+			+ "• Зброя: [color=#ffd070][b]Рівень %d / 7[/b][/color]  |  Броня: [color=#7cd6ff][b]Рів.%d/7[/b][/color]\n" % [equipped_weapon_tier, equipped_tier]
 			+ "• Здоров'я: [color=#ff8a7a][b]%d HP[/b][/color]\n" % int(roundf(GAME_STATE.get_player_max_health()))
-			+ "• Кевларовий захист: [color=#7ec8ff][b]-%d%% урону[/b][/color]\n" % armor_pct
-			+ "• Урон автомата: [color=#ffb85c][b]%d[/b][/color]  |  Темп: [color=#ffd86b][b]%.1f/с[/b][/color]\n" % [int(roundf(GAME_STATE.get_player_bullet_damage())), GAME_STATE.get_player_fire_rate()]
+			+ "• Урон автомата: [color=#ffb85c][b]%d[/b][/color]  |  Темп: [color=#ffd86b][b]10.0/с[/b][/color]\n" % int(roundf(GAME_STATE.get_player_bullet_damage()))
 			+ "• Вогнева потужність: [color=#ffe28a][b]%d DPS[/b][/color]\n" % int(round(dps))
-			+ "• Магазин: [color=#e5d29c][b]%d наб.[/b][/color] (перезар. [b]%.2fс[/b])\n" % [GAME_STATE.get_player_magazine_size(), GAME_STATE.get_player_reload_time()]
-			+ "• Шанс криту (×1.75): [color=#ff7a66][b]%d%%[/b][/color]\n" % crit_pct
+			+ "• Швидк. кулі: [color=#e5d29c][b]%d[/b][/color]  |  Крит (×1.75): [color=#ff7a66][b]%d%%[/b][/color]\n" % [int(roundf(GAME_STATE.get_player_bullet_speed())), crit_pct]
 			+ "• Польова аптечка [2]: [color=#6ee89a][b]КД %dс[/b][/color]\n" % int(round(GAME_STATE.get_player_medkit_cooldown()))
 			+ "• Граната М67 [1]: [color=#ff9e5e][b]%d урону[/b][/color] (КД [b]%dс[/b])\n" % [int(roundf(GAME_STATE.get_player_grenade_damage())), int(round(GAME_STATE.get_player_grenade_cooldown()))]
 			+ "• Бонус трофеїв: [color=#ffe066][b]+%d%% монет[/b][/color]" % coin_pct
@@ -683,18 +732,19 @@ func _refresh_ui() -> void:
 		var cbtn: Button = _cat_buttons[cid]
 		_style_pill_button(cbtn, _active_category == cid, Color(0.92, 0.76, 0.36))
 
-	# Оновлюємо всі 9 плиток у сітці
+	# Оновлюємо всі плитки у сітці
 	for def in UPGRADE_DEFS:
 		var key := String(def["key"])
 		var tile: _UpgradeTile = _tiles_by_key.get(key)
 		if tile == null:
 			continue
 		var lvl := GAME_STATE.get_upgrade_level(key)
+		var max_lvl := GAME_STATE.get_max_upgrade_level(key)
 		var maxed := not GAME_STATE.can_upgrade(key)
 		var cost := GAME_STATE.get_upgrade_cost(key)
 		var can_afford := (not maxed) and (GAME_STATE.coins >= cost)
 		var matches_filter := _does_def_match_filter(def, can_afford)
-		tile.update_state(lvl, GAME_STATE.MAX_UPGRADE_LEVEL, cost, can_afford, maxed, key == _selected_key, matches_filter)
+		tile.update_state(lvl, max_lvl, cost, can_afford, maxed, key == _selected_key, matches_filter)
 
 	# Оновлюємо правий Інспектор
 	_refresh_inspector(inspect_def)
@@ -710,7 +760,7 @@ func _does_def_match_filter(def: Dictionary, can_afford: bool) -> bool:
 func _refresh_inspector(def: Dictionary) -> void:
 	var key := String(def["key"])
 	var lvl := GAME_STATE.get_upgrade_level(key)
-	var max_lvl := GAME_STATE.MAX_UPGRADE_LEVEL
+	var max_lvl := GAME_STATE.get_max_upgrade_level(key)
 	var maxed := not GAME_STATE.can_upgrade(key)
 	var cost := GAME_STATE.get_upgrade_cost(key)
 	var can_afford := (not maxed) and (GAME_STATE.coins >= cost)
@@ -737,30 +787,24 @@ func _refresh_inspector(def: Dictionary) -> void:
 	var pair := _get_stat_comparison_strings(key, lvl)
 	_insp_stat_curr_label.text = "Поточний:  " + pair[0]
 	if maxed:
-		_insp_stat_next_label.text = "Досягнуто максимальної потужності (5/5)"
+		_insp_stat_next_label.text = "Досягнуто максимальної потужності (%d/%d)" % [max_lvl, max_lvl]
 		_insp_stat_next_label.add_theme_color_override("font_color", Color(0.98, 0.84, 0.38))
 	else:
 		_insp_stat_next_label.text = "Наступний: " + pair[1]
 		_insp_stat_next_label.add_theme_color_override("font_color", Color(0.48, 0.96, 0.58))
 
-	_style_buy_button(maxed, can_afford, cost)
+	_style_buy_button(maxed, can_afford, cost, max_lvl)
 
 
 func _get_stat_comparison_strings(key: String, lvl: int) -> Array[String]:
-	var nl := mini(lvl + 1, GAME_STATE.MAX_UPGRADE_LEVEL)
+	var nl := mini(lvl + 1, GAME_STATE.get_max_upgrade_level(key))
 	match key:
 		"damage":
-			return ["%d урону за постріл" % (10 + lvl * 3), "%d урону за постріл (+3)" % (10 + nl * 3)]
-		"fire_rate":
-			return ["%.1f постр./сек" % (10.0 + lvl * 1.2), "%.1f постр./сек (+1.2/с)" % (10.0 + nl * 1.2)]
-		"mag":
-			return ["%d набоїв | %.2fс перезарядка" % [30 + lvl * 5, 3.5 - lvl * 0.30], "%d набоїв | %.2fс (-0.30с)" % [30 + nl * 5, 3.5 - nl * 0.30]]
+			return ["Зброя Рів.%d • %d урону" % [1 + lvl, 10 + lvl * 3], "Зброя Рів.%d • %d урону (+3)" % [1 + nl, 10 + nl * 3]]
 		"ammo":
 			return ["Крит %d%% (x1.75) | Швидк. %d" % [lvl * 8, 1380 + lvl * 130], "Крит %d%% (+8%%) | Швидк. %d" % [nl * 8, 1380 + nl * 130]]
 		"hp":
-			return ["%d HP макс. здоров'я" % (100 + lvl * 25), "%d HP макс. здоров'я (+25 HP)" % (100 + nl * 25)]
-		"armor":
-			return ["-%d%% вхідного урону" % (lvl * 6), "-%d%% вхідного урону (+6%% захисту)" % (nl * 6)]
+			return ["Броня Рів.%d • %d HP" % [1 + lvl, 100 + lvl * 25], "Броня Рів.%d • %d HP (+25)" % [1 + nl, 100 + nl * 25]]
 		"medkit":
 			return ["Перезарядка аптечки: %d сек" % (40 - lvl * 4), "Перезарядка аптечки: %d сек (-4с)" % (40 - nl * 4)]
 		"grenade":
@@ -770,32 +814,35 @@ func _get_stat_comparison_strings(key: String, lvl: int) -> Array[String]:
 	return ["", ""]
 
 
-func _style_buy_button(maxed: bool, can_afford: bool, cost: int) -> void:
+func _style_buy_button(maxed: bool, can_afford: bool, cost: int, max_lvl: int = 5) -> void:
 	var sb_normal := StyleBoxFlat.new()
-	sb_normal.set_corner_radius_all(7)
+	sb_normal.set_corner_radius_all(9)
 	sb_normal.border_width_left = 3
 	sb_normal.border_width_top = 3
 	sb_normal.border_width_right = 3
 	sb_normal.border_width_bottom = 3
+	sb_normal.shadow_color = Color(0.04, 0.045, 0.05, 0.92)
+	sb_normal.shadow_size = 2
+	sb_normal.shadow_offset = Vector2(0.0, 2.0)
 
 	if maxed:
-		_insp_buy_button.text = "★ МАКСИМАЛЬНИЙ РІВЕНЬ (5/5)"
+		_insp_buy_button.text = "МАКСИМАЛЬНИЙ РІВЕНЬ (%d/%d)" % [max_lvl, max_lvl]
 		_insp_buy_button.disabled = true
-		sb_normal.bg_color = Color(0.24, 0.21, 0.12, 0.95)
-		sb_normal.border_color = Color(0.86, 0.72, 0.32, 0.9)
-		_insp_buy_button.add_theme_color_override("font_disabled_color", Color(0.98, 0.86, 0.44))
+		sb_normal.bg_color = Color(0.32, 0.26, 0.12, 0.98)
+		sb_normal.border_color = Color(0.88, 0.74, 0.34, 0.96)
+		_insp_buy_button.add_theme_color_override("font_disabled_color", Color(1.0, 0.90, 0.48))
 	elif can_afford:
 		_insp_buy_button.text = "КУПИТИ МОДУЛЬ  —  $%d" % cost
 		_insp_buy_button.disabled = false
-		sb_normal.bg_color = Color(0.18, 0.38, 0.22, 0.98)
-		sb_normal.border_color = Color(0.52, 0.92, 0.58, 1.0)
+		sb_normal.bg_color = Color(0.14, 0.38, 0.20, 0.99)
+		sb_normal.border_color = Color(0.46, 0.88, 0.54, 1.0)
 		_insp_buy_button.add_theme_color_override("font_color", Color(0.96, 1.0, 0.94))
 	else:
 		_insp_buy_button.text = "НЕДОСТАТНЬО МОНЕТ ($%d)" % cost
 		_insp_buy_button.disabled = true
-		sb_normal.bg_color = Color(0.18, 0.14, 0.14, 0.95)
-		sb_normal.border_color = Color(0.52, 0.30, 0.28, 0.85)
-		_insp_buy_button.add_theme_color_override("font_disabled_color", Color(0.82, 0.56, 0.52))
+		sb_normal.bg_color = Color(0.28, 0.12, 0.11, 0.98)
+		sb_normal.border_color = Color(0.58, 0.24, 0.22, 0.95)
+		_insp_buy_button.add_theme_color_override("font_disabled_color", Color(0.88, 0.38, 0.34))
 
 	var sb_hover := sb_normal.duplicate() as StyleBoxFlat
 	sb_hover.bg_color = sb_normal.bg_color.lightened(0.14)
@@ -900,6 +947,38 @@ func _setup_back_button() -> void:
 	_back_button.mouse_exited.connect(_on_button_hover.bind(_back_button, false))
 	if fade_overlay != null:
 		move_child(fade_overlay, get_child_count() - 1)
+
+
+func _setup_dev_test_controls() -> void:
+	## Тимчасова тестова кнопка для швидкого додавання монет під час розробки.
+	_dev_add_coins_button = GAME_STATE.create_test_button("ТЕСТ: +100 МОНЕТ", Color(0.24, 0.30, 0.16, 0.96))
+	_dev_add_coins_button.name = "DevAddCoinsButton"
+	_dev_add_coins_button.anchor_left = 0.5
+	_dev_add_coins_button.anchor_top = 1.0
+	_dev_add_coins_button.anchor_right = 0.5
+	_dev_add_coins_button.anchor_bottom = 1.0
+	_dev_add_coins_button.offset_left = -126.0
+	_dev_add_coins_button.offset_top = -74.0
+	_dev_add_coins_button.offset_right = 126.0
+	_dev_add_coins_button.offset_bottom = -28.0
+	_dev_add_coins_button.pivot_offset = Vector2(126.0, 23.0)
+	_dev_add_coins_button.focus_mode = Control.FOCUS_NONE
+	_dev_add_coins_button.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.92))
+	_dev_add_coins_button.add_theme_constant_override("outline_size", 3)
+	_dev_add_coins_button.pressed.connect(_on_dev_add_coins_pressed)
+	_dev_add_coins_button.mouse_entered.connect(_on_button_hover.bind(_dev_add_coins_button, true))
+	_dev_add_coins_button.mouse_exited.connect(_on_button_hover.bind(_dev_add_coins_button, false))
+	add_child(_dev_add_coins_button)
+	if fade_overlay != null:
+		move_child(fade_overlay, get_child_count() - 1)
+
+
+func _on_dev_add_coins_pressed() -> void:
+	if _is_transitioning:
+		return
+	GAME_STATE.coins += 100
+	_play_sfx(_sfx_buy, -6.0)
+	_refresh_ui()
 
 
 func _on_back_pressed() -> void:
@@ -1026,8 +1105,310 @@ func _synth_chord(freqs: Array, dur: float, amp: float) -> AudioStreamWAV:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ДОПОМІЖНІ ВІЗУАЛЬНІ КЛАСИ (ТЕМАТИКА TETHER6: ЗНОШЕНА ЛАТУНЬ + ТЕМНА СТАЛЬ)
+# ДОПОМІЖНІ ВІЗУАЛЬНІ КЛАСИ (ТЕМАТИКА TETHER6: БРОНЬОВАНА ОЛИВА + СТАЛЬ + ЛАТУНЬ)
 # ══════════════════════════════════════════════════════════════════════════════
+
+static func _draw_bevel_rect(
+	canvas: CanvasItem,
+	rect: Rect2,
+	radius: int,
+	fill: Color,
+	hi: Color,
+	lo: Color,
+	outline: Color,
+	border_w: int = 3
+) -> void:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = fill
+	sb.border_color = outline
+	sb.set_border_width_all(border_w)
+	sb.set_corner_radius_all(radius)
+	sb.draw(canvas.get_canvas_item(), rect)
+
+	var inset := clampf(float(radius) * 0.55, 4.0, rect.size.x * 0.16)
+	if hi.a > 0.01 and rect.size.x > inset * 2.5:
+		var hy := rect.position.y + float(border_w) + 1.5
+		canvas.draw_line(Vector2(rect.position.x + inset, hy), Vector2(rect.position.x + rect.size.x - inset, hy), hi, 1.8)
+	if lo.a > 0.01 and rect.size.x > inset * 2.5:
+		var ly := rect.position.y + rect.size.y - float(border_w) - 1.5
+		canvas.draw_line(Vector2(rect.position.x + inset, ly), Vector2(rect.position.x + rect.size.x - inset, ly), lo, 1.8)
+
+
+static func _make_octagon(rect: Rect2, inset: float, chamfer_ratio: float = 0.22) -> PackedVector2Array:
+	var r := rect.grow(-inset)
+	var ch := minf(r.size.x, r.size.y) * chamfer_ratio
+	var x0 := r.position.x
+	var y0 := r.position.y
+	var x1 := r.end.x
+	var y1 := r.end.y
+	return PackedVector2Array([
+		Vector2(x0 + ch, y0),
+		Vector2(x1 - ch, y0),
+		Vector2(x1, y0 + ch),
+		Vector2(x1, y1 - ch),
+		Vector2(x1 - ch, y1),
+		Vector2(x0 + ch, y1),
+		Vector2(x0, y1 - ch),
+		Vector2(x0, y0 + ch),
+	])
+
+
+static func _draw_uniform_icon_socket(canvas: CanvasItem, rect: Rect2, highlight_gold: Color = Color(0.84, 0.68, 0.30, 1.0)) -> void:
+	# Зовнішній темний округлений сокет (#0E1115) — ідентичний для всіх 6 карток та інспектора
+	_draw_bevel_rect(
+		canvas,
+		rect,
+		11,
+		Color(0.055, 0.067, 0.082, 1.0),
+		Color(0.18, 0.20, 0.23, 0.55),
+		Color(0.42, 0.44, 0.38, 0.45),
+		UI_INK,
+		3
+	)
+	var outer_oct := _make_octagon(rect, rect.size.x * 0.065, 0.20)
+	canvas.draw_colored_polygon(outer_oct, Color(0.045, 0.055, 0.070, 1.0))
+	var outer_closed := outer_oct + PackedVector2Array([outer_oct[0]])
+	canvas.draw_polyline(outer_closed, highlight_gold, 2.2, true)
+
+	var inner_oct := _make_octagon(rect, rect.size.x * 0.105, 0.20)
+	var inner_closed := inner_oct + PackedVector2Array([inner_oct[0]])
+	canvas.draw_polyline(inner_closed, highlight_gold.lightened(0.22), 1.3, true)
+
+
+static func _draw_screw(canvas: CanvasItem, center: Vector2, r: float = 5.0) -> void:
+	canvas.draw_circle(center, r, UI_INK)
+	canvas.draw_circle(center, r - 1.2, Color(0.72, 0.73, 0.69, 1.0))
+	canvas.draw_circle(center + Vector2(-0.7, -0.7), (r - 1.2) * 0.65, Color(0.86, 0.87, 0.83, 1.0))
+	var cross := r * 0.52
+	canvas.draw_line(center + Vector2(-cross, 0.0), center + Vector2(cross, 0.0), Color(0.24, 0.25, 0.23, 1.0), 1.3)
+	canvas.draw_line(center + Vector2(0.0, -cross), center + Vector2(0.0, cross), Color(0.24, 0.25, 0.23, 1.0), 1.3)
+
+
+static func _draw_scanlines(canvas: CanvasItem, rect: Rect2, step_x: float = 4.0, alpha: float = 0.045) -> void:
+	var x := rect.position.x + step_x
+	var end_x := rect.position.x + rect.size.x - 2.0
+	while x < end_x:
+		canvas.draw_line(
+			Vector2(x, rect.position.y + 3.0),
+			Vector2(x, rect.position.y + rect.size.y - 3.0),
+			Color(1.0, 1.0, 1.0, alpha),
+			1.0
+		)
+		x += step_x
+
+
+static func _draw_gear_drum(canvas: CanvasItem, center: Vector2, outer_r: float, teeth: int) -> void:
+	canvas.draw_circle(center, outer_r + 2.0, UI_INK)
+	canvas.draw_circle(center, outer_r - 2.0, UI_OLIVE_DARK)
+	for i in range(teeth):
+		var a := float(i) * TAU / float(teeth)
+		var p1 := center + Vector2.RIGHT.rotated(a) * (outer_r - 9.0)
+		var p2 := center + Vector2.RIGHT.rotated(a) * (outer_r + 3.0)
+		canvas.draw_line(p1, p2, UI_INK, 7.0)
+		canvas.draw_line(p1, p2 - Vector2.RIGHT.rotated(a) * 1.5, UI_OLIVE_LO, 4.0)
+	canvas.draw_circle(center, outer_r - 10.0, UI_INK)
+	canvas.draw_circle(center, outer_r - 13.0, UI_STEEL_LO)
+	canvas.draw_circle(center, outer_r * 0.34, UI_INK)
+	canvas.draw_circle(center, outer_r * 0.26, UI_OLIVE_LO)
+
+
+static func _draw_gold_coin(canvas: CanvasItem, center: Vector2, r: float = 15.0) -> void:
+	canvas.draw_circle(center, r + 2.0, UI_INK)
+	canvas.draw_circle(center, r, Color(0.84, 0.62, 0.14, 1.0))
+	canvas.draw_circle(center + Vector2(-1.2, -1.2), r * 0.78, Color(0.98, 0.80, 0.28, 1.0))
+	canvas.draw_circle(center, r * 0.60, Color(0.82, 0.60, 0.14, 1.0))
+	canvas.draw_arc(center, r * 0.72, 0.0, TAU, 24, Color(1.0, 0.92, 0.56, 0.85), 1.5)
+	var font := ThemeDB.fallback_font
+	if font != null:
+		canvas.draw_string(font, center + Vector2(-9.0, 6.0), "$", HORIZONTAL_ALIGNMENT_CENTER, 18.0, 17, Color(0.32, 0.20, 0.04, 1.0))
+
+
+class _ConsoleChassisCanvas extends Control:
+	func _draw() -> void:
+		# Декоративні шестерні та коліщатка позаду корпусу консолі
+		UpgradeMenu._draw_gear_drum(self, Vector2(36.0, 560.0), 58.0, 14)
+		UpgradeMenu._draw_gear_drum(self, Vector2(1196.0, 560.0), 58.0, 14)
+
+		# Верхні бічні барабани/шестерні біля кутів шапки
+		UpgradeMenu._draw_bevel_rect(self, Rect2(-18.0, 24.0, 26.0, 86.0), 6, UI_OLIVE_LO, UI_OLIVE, UI_OLIVE_DARK, UI_INK, 3)
+		for ry in range(34, 104, 11):
+			draw_line(Vector2(-15.0, float(ry)), Vector2(4.0, float(ry)), UI_INK, 2.0)
+			draw_line(Vector2(-15.0, float(ry) + 3.0), Vector2(4.0, float(ry) + 3.0), UI_OLIVE_HI, 1.2)
+
+		UpgradeMenu._draw_bevel_rect(self, Rect2(1224.0, 24.0, 26.0, 86.0), 6, UI_OLIVE_LO, UI_OLIVE, UI_OLIVE_DARK, UI_INK, 3)
+		for ry in range(34, 104, 11):
+			draw_line(Vector2(1228.0, float(ry)), Vector2(1247.0, float(ry)), UI_INK, 2.0)
+			draw_line(Vector2(1228.0, float(ry) + 3.0), Vector2(1247.0, float(ry) + 3.0), UI_OLIVE_HI, 1.2)
+
+		# Бокова нижня шестерня праворуч та ліворуч
+		UpgradeMenu._draw_bevel_rect(self, Rect2(1224.0, 310.0, 20.0, 150.0), 5, UI_OLIVE_LO, UI_OLIVE, UI_OLIVE_DARK, UI_INK, 3)
+		for gy in range(320, 452, 12):
+			draw_line(Vector2(1227.0, float(gy)), Vector2(1241.0, float(gy)), UI_INK, 2.2)
+
+		UpgradeMenu._draw_bevel_rect(self, Rect2(-12.0, 310.0, 20.0, 150.0), 5, UI_OLIVE_LO, UI_OLIVE, UI_OLIVE_DARK, UI_INK, 3)
+		for gy in range(320, 452, 12):
+			draw_line(Vector2(-9.0, float(gy)), Vector2(5.0, float(gy)), UI_INK, 2.2)
+
+		# Нижні упори та індикаторний блок з 3 жовтогарячими LED під інспектором
+		UpgradeMenu._draw_bevel_rect(self, Rect2(342.0, 600.0, 94.0, 18.0), 6, UI_OLIVE_LO, UI_OLIVE, UI_OLIVE_DARK, UI_INK, 3)
+		for bx in range(354, 428, 12):
+			draw_line(Vector2(float(bx), 603.0), Vector2(float(bx), 615.0), UI_INK, 2.0)
+
+		UpgradeMenu._draw_bevel_rect(self, Rect2(812.0, 600.0, 94.0, 18.0), 6, UI_OLIVE_LO, UI_OLIVE, UI_OLIVE_DARK, UI_INK, 3)
+		for bx in range(824, 898, 12):
+			draw_line(Vector2(float(bx), 603.0), Vector2(float(bx), 615.0), UI_INK, 2.0)
+
+		var led_pod := Rect2(972.0, 600.0, 96.0, 22.0)
+		UpgradeMenu._draw_bevel_rect(self, led_pod, 6, UI_OLIVE_LO, UI_OLIVE, UI_OLIVE_DARK, UI_INK, 3)
+		for li in range(3):
+			var lr := Rect2(988.0 + float(li) * 23.0, 605.0, 14.0, 11.0)
+			UpgradeMenu._draw_bevel_rect(self, lr, 3, Color(0.95, 0.66, 0.16, 1.0), Color(1.0, 0.90, 0.56, 1.0), Color(0.65, 0.36, 0.06, 1.0), UI_INK, 2)
+
+		# Головне оливково-латунне шасі
+		var body_rect := Rect2(0.0, 8.0, 1232.0, 598.0)
+		UpgradeMenu._draw_bevel_rect(self, body_rect, 22, UI_OLIVE, UI_OLIVE_HI, UI_OLIVE_LO, UI_INK, 4)
+
+		# Виступаюча центральна арка «ТАКТИЧНИЙ АРСЕНАЛ»
+		var arch_outer := Rect2(400.0, -10.0, 432.0, 74.0)
+		UpgradeMenu._draw_bevel_rect(self, arch_outer, 20, UI_OLIVE, UI_OLIVE_HI, UI_OLIVE_LO, UI_INK, 4)
+		# Зливаємо нижню межу арки з верхньою смугою шасі без чорного розрізу
+		var arch_seam := Rect2(404.0, 8.0, 424.0, 58.0)
+		UpgradeMenu._draw_bevel_rect(self, arch_seam, 14, UI_OLIVE, UI_OLIVE_HI, Color.TRANSPARENT, Color.TRANSPARENT, 0)
+
+		var arch_crt := Rect2(416.0, -2.0, 400.0, 54.0)
+		UpgradeMenu._draw_bevel_rect(self, arch_crt, 14, Color(0.035, 0.04, 0.048, 1.0), Color(0.11, 0.12, 0.13, 1.0), Color.BLACK, UI_INK, 3)
+		UpgradeMenu._draw_scanlines(self, arch_crt, 4.0, 0.05)
+
+		# Ліва та права планки верхньої панелі (Рівень / Монети)
+		var left_hdr := Rect2(18.0, 13.0, 376.0, 45.0)
+		UpgradeMenu._draw_bevel_rect(self, left_hdr, 10, Color(0.16, 0.175, 0.155, 0.98), Color(0.28, 0.30, 0.26, 0.8), Color.BLACK, UI_INK, 3)
+
+		var right_hdr := Rect2(838.0, 13.0, 376.0, 45.0)
+		UpgradeMenu._draw_bevel_rect(self, right_hdr, 10, Color(0.16, 0.175, 0.155, 0.98), Color(0.28, 0.30, 0.26, 0.8), Color.BLACK, UI_INK, 3)
+		UpgradeMenu._draw_gold_coin(self, Vector2(864.0, 35.5), 14.0)
+
+		# Заглиблений внутрішній лоток для 3 робочих зон
+		var well_outer := Rect2(10.0, 66.0, 1212.0, 528.0)
+		UpgradeMenu._draw_bevel_rect(self, well_outer, 12, UI_TRAY, Color(0.11, 0.12, 0.10, 0.95), UI_OLIVE_HI, UI_INK, 3)
+
+		# Сталеві кутові кріпильні скоби з гвинтами на внутрішній рамі
+		var lb := PackedVector2Array([
+			Vector2(6.0, 62.0), Vector2(44.0, 62.0), Vector2(44.0, 78.0),
+			Vector2(24.0, 78.0), Vector2(24.0, 98.0), Vector2(6.0, 98.0)
+		])
+		draw_colored_polygon(lb, UI_STEEL)
+		draw_polyline(lb + PackedVector2Array([lb[0]]), UI_INK, 2.5)
+		UpgradeMenu._draw_screw(self, Vector2(16.0, 72.0), 4.5)
+
+		var rb := PackedVector2Array([
+			Vector2(1188.0, 62.0), Vector2(1226.0, 62.0), Vector2(1226.0, 98.0),
+			Vector2(1208.0, 98.0), Vector2(1208.0, 78.0), Vector2(1188.0, 78.0)
+		])
+		draw_colored_polygon(rb, UI_STEEL)
+		draw_polyline(rb + PackedVector2Array([rb[0]]), UI_INK, 2.5)
+		UpgradeMenu._draw_screw(self, Vector2(1216.0, 72.0), 4.5)
+
+		# Нижні кутові гвинти головного корпусу
+		UpgradeMenu._draw_screw(self, Vector2(20.0, 588.0), 5.0)
+		UpgradeMenu._draw_screw(self, Vector2(1212.0, 588.0), 5.0)
+
+
+class _ZonePlateCanvas extends Control:
+	var title_text: String = ""
+	var title_width: float = 180.0
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var r := Rect2(Vector2.ZERO, size)
+		UpgradeMenu._draw_bevel_rect(self, r, 10, UI_STEEL, UI_STEEL_HI, UI_STEEL_LO, UI_INK, 3)
+
+		# Тонка внутрішня фаска по периметру
+		draw_rect(r.grow(-5.0), Color(0.24, 0.25, 0.23, 0.45), false, 1.0)
+
+		# 4 металеві гвинти в кутах зони
+		UpgradeMenu._draw_screw(self, Vector2(11.0, 11.0), 4.2)
+		UpgradeMenu._draw_screw(self, Vector2(size.x - 11.0, 11.0), 4.2)
+		UpgradeMenu._draw_screw(self, Vector2(11.0, size.y - 11.0), 4.2)
+		UpgradeMenu._draw_screw(self, Vector2(size.x - 11.0, size.y - 11.0), 4.2)
+
+		if not title_text.is_empty():
+			var tab_x := roundf((size.x - title_width) * 0.5)
+			var tab_rect := Rect2(tab_x, 3.0, title_width, 24.0)
+			UpgradeMenu._draw_bevel_rect(self, tab_rect, 7, Color(0.35, 0.37, 0.34, 1.0), UI_STEEL_HI, UI_STEEL_LO, UI_INK, 2)
+			var font := ThemeDB.fallback_font
+			if font != null:
+				draw_string(font, Vector2(tab_x, 20.0), title_text, HORIZONTAL_ALIGNMENT_CENTER, title_width, 13, Color(0.96, 0.95, 0.88, 1.0))
+
+
+class _RoundedWellCanvas extends Control:
+	var bg_color: Color = Color(0.086, 0.094, 0.106, 0.98)
+	var border_color: Color = Color(0.06, 0.07, 0.08, 1.0)
+	var accent_rim_color: Color = Color(0.54, 0.50, 0.36, 0.72)
+	var corner_radius: int = 8
+	var draw_rivets: bool = false
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var r := Rect2(Vector2.ZERO, size)
+		UpgradeMenu._draw_bevel_rect(self, r, corner_radius, bg_color, Color(0.18, 0.20, 0.22, 0.45), accent_rim_color, border_color, 3)
+		if draw_rivets:
+			UpgradeMenu._draw_screw(self, Vector2(8.0, 8.0), 3.0)
+			UpgradeMenu._draw_screw(self, Vector2(size.x - 8.0, 8.0), 3.0)
+			UpgradeMenu._draw_screw(self, Vector2(8.0, size.y - 8.0), 3.0)
+			UpgradeMenu._draw_screw(self, Vector2(size.x - 8.0, size.y - 8.0), 3.0)
+
+
+class _SkinMiniIcon extends Control:
+	var skin_id: String = "shades_gold"
+
+	func _draw() -> void:
+		if skin_id == "standard":
+			# Тактичний шолом
+			draw_circle(Vector2(7.5, 8.5), 5.5, UI_INK)
+			draw_circle(Vector2(7.5, 8.0), 4.2, Color(0.45, 0.52, 0.40, 1.0))
+			draw_rect(Rect2(2.5, 8.5, 10.0, 3.0), Color(0.28, 0.33, 0.25, 1.0), true)
+			draw_line(Vector2(4.0, 5.5), Vector2(10.5, 5.5), Color(0.75, 0.82, 0.68, 0.85), 1.4)
+			return
+
+		var lens_col := Color(0.98, 0.78, 0.22, 1.0)
+		if skin_id == "shades_cyber":
+			lens_col = Color(0.24, 0.90, 1.0, 1.0)
+		elif skin_id == "shades_black":
+			lens_col = Color(0.16, 0.18, 0.22, 1.0)
+
+		# Тактичні окуляри з чіткою сріблясто-сталевою оправою
+		draw_rect(Rect2(0.0, 4.0, 15.0, 8.0), UI_INK, true)
+		draw_rect(Rect2(0.5, 4.5, 14.0, 7.0), Color(0.58, 0.60, 0.56, 0.9), false, 1.0)
+		draw_rect(Rect2(1.5, 5.5, 5.0, 4.5), lens_col, true)
+		draw_rect(Rect2(8.5, 5.5, 5.0, 4.5), lens_col, true)
+		draw_line(Vector2(2.2, 6.2), Vector2(4.6, 6.2), Color(1.0, 1.0, 1.0, 0.58), 1.0)
+		draw_line(Vector2(9.2, 6.2), Vector2(11.6, 6.2), Color(1.0, 1.0, 1.0, 0.58), 1.0)
+
+
+class _BuyButtonDecor extends Control:
+	func _draw() -> void:
+		if size.x <= 12.0 or size.y <= 12.0:
+			return
+		draw_line(Vector2(14.0, 5.0), Vector2(size.x - 14.0, 5.0), Color(1.0, 1.0, 1.0, 0.16), 2.0)
+		UpgradeMenu._draw_screw(self, Vector2(12.0, 12.0), 3.4)
+		UpgradeMenu._draw_screw(self, Vector2(size.x - 12.0, 12.0), 3.4)
+		UpgradeMenu._draw_screw(self, Vector2(12.0, size.y - 12.0), 3.4)
+		UpgradeMenu._draw_screw(self, Vector2(size.x - 12.0, size.y - 12.0), 3.4)
+
+
+class _UniformSocketCanvas extends Control:
+	var highlight_gold: Color = Color(0.84, 0.68, 0.30, 1.0)
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		UpgradeMenu._draw_uniform_icon_socket(self, Rect2(Vector2.ZERO, size), highlight_gold)
+
 
 class _BevelPanelCanvas extends Control:
 	var bg_color: Color = Color(0.08, 0.09, 0.11, 0.96)
@@ -1036,24 +1417,12 @@ class _BevelPanelCanvas extends Control:
 
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, size)
-		if bg_color.a > 0.01:
-			draw_rect(r, bg_color, true)
-		# Подвійна латунна рамка зі скошеним металевим відблиском
-		draw_rect(r, Color(0.04, 0.045, 0.055, 0.95), false, 3.0)
-		draw_rect(r.grow(-2.0), border_color, false, 2.0)
-		draw_line(Vector2(3, 3), Vector2(size.x - 3, 3), border_color.lightened(0.28), 1.5)
-		draw_rect(r.grow(-5.0), Color(0.18, 0.20, 0.24, 0.75), false, 1.0)
-
+		UpgradeMenu._draw_bevel_rect(self, r, 10, bg_color, border_color.lightened(0.24), border_color.darkened(0.25), UI_INK, 3)
 		if draw_rivets:
-			var pts := [
-				Vector2(9, 9),
-				Vector2(size.x - 9, 9),
-				Vector2(9, size.y - 9),
-				Vector2(size.x - 9, size.y - 9),
-			]
-			for p in pts:
-				draw_circle(p, 3.5, Color(0.12, 0.11, 0.09, 1.0))
-				draw_circle(p, 2.3, border_color.lightened(0.15))
+			UpgradeMenu._draw_screw(self, Vector2(10.0, 10.0), 4.0)
+			UpgradeMenu._draw_screw(self, Vector2(size.x - 10.0, 10.0), 4.0)
+			UpgradeMenu._draw_screw(self, Vector2(10.0, size.y - 10.0), 4.0)
+			UpgradeMenu._draw_screw(self, Vector2(size.x - 10.0, size.y - 10.0), 4.0)
 
 
 class _UpgradeTile extends Control:
@@ -1089,6 +1458,11 @@ class _UpgradeTile extends Control:
 			queue_redraw()
 		)
 
+	func set_icon_texture(tex: Texture2D) -> void:
+		if _icon_tex != tex:
+			_icon_tex = tex
+			queue_redraw()
+
 	func update_state(lvl: int, max_lvl: int, cost: int, can_afford: bool, maxed: bool, selected: bool, matches_filter: bool) -> void:
 		_lvl = lvl
 		_max_lvl = max_lvl
@@ -1097,7 +1471,7 @@ class _UpgradeTile extends Control:
 		_maxed = maxed
 		_selected = selected
 		_matches_filter = matches_filter
-		modulate.a = 1.0 if matches_filter else 0.28
+		modulate.a = 1.0 if matches_filter else 0.30
 		queue_redraw()
 
 	func play_purchase_pulse() -> void:
@@ -1122,88 +1496,112 @@ class _UpgradeTile extends Control:
 		var accent: Color = _def.get("accent", Color(0.88, 0.74, 0.38))
 		var t_sec := float(Time.get_ticks_msec()) * 0.004
 
-		# Базова підкладка плитки
-		var bg := Color(0.11, 0.125, 0.15, 0.98)
-		if _selected:
-			bg = Color(0.17, 0.18, 0.21, 0.99)
-		elif _hovered:
-			bg = Color(0.14, 0.155, 0.185, 0.99)
-		draw_rect(r, bg, true)
+		# Металева броньована плитка в стилі оливково-сталевого терміналу
+		var bg := Color(0.325, 0.341, 0.310, 0.99)
+		var hi := Color(0.467, 0.486, 0.447, 0.90)
+		var lo := Color(0.188, 0.196, 0.176, 0.95)
+		var outline := UI_INK
+		var bw := 3
 
-		# Рамка плитки
-		var border_col := Color(0.42, 0.38, 0.28, 0.9)
-		var border_w := 2.0
 		if _selected:
 			var glow := 0.5 + 0.5 * sin(t_sec * 2.2)
-			border_col = accent.lerp(Color(1.0, 0.92, 0.62, 1.0), 0.35 + 0.25 * glow)
-			border_w = 2.5
+			bg = Color(0.396, 0.380, 0.278, 0.99)
+			hi = Color(0.66, 0.62, 0.42, 1.0)
+			outline = accent.lerp(Color(1.0, 0.92, 0.58, 1.0), 0.45 + 0.25 * glow)
 		elif _hovered:
-			border_col = accent.lightened(0.15)
+			bg = Color(0.376, 0.392, 0.357, 0.99)
+			outline = accent.lightened(0.12)
 		elif _maxed:
-			border_col = Color(0.86, 0.72, 0.32, 0.92)
-		draw_rect(r.grow(-1.0), border_col, false, border_w)
+			bg = Color(0.365, 0.345, 0.245, 0.99)
+			outline = Color(0.76, 0.62, 0.26, 1.0)
+
+		UpgradeMenu._draw_bevel_rect(self, r, 8, bg, hi, lo, outline, bw)
+
+		# 4 маленькі заклепки по кутах плитки
+		var rivet_pts: Array[Vector2] = [
+			Vector2(6.5, 6.5),
+			Vector2(size.x - 6.5, 6.5),
+			Vector2(6.5, size.y - 6.5),
+			Vector2(size.x - 6.5, size.y - 6.5),
+		]
+		for rp in rivet_pts:
+			draw_circle(rp, 2.3, UI_INK)
+			draw_circle(rp, 1.4, Color(0.68, 0.69, 0.64, 1.0))
 
 		# Спалах при купівлі
 		if _pulse_t > 0.0:
-			draw_rect(r.grow(-2.0), Color(1.0, 0.92, 0.55, _pulse_t * 0.42), true)
+			UpgradeMenu._draw_bevel_rect(self, r.grow(-2.0), 7, Color(1.0, 0.92, 0.55, _pulse_t * 0.40), Color.TRANSPARENT, Color.TRANSPARENT, Color.TRANSPARENT, 0)
 
-		# Іконка в центрі-вгорі
+		# Однакове уніфіковане темне гніздо із подвійною золотою восьмикутною рамкою на всіх картках
+		var socket_sz := Vector2(114.0, 114.0)
+		var socket_pos := Vector2((size.x - socket_sz.x) * 0.5, 30.0)
+		var socket_rect := Rect2(socket_pos, socket_sz)
+		var frame_gold := Color(0.95, 0.78, 0.36, 1.0) if _selected else Color(0.82, 0.66, 0.28, 0.96)
+		UpgradeMenu._draw_uniform_icon_socket(self, socket_rect, frame_gold)
+
 		if _icon_tex != null:
-			var icon_sz := Vector2(74, 74)
-			var icon_pos := Vector2((size.x - icon_sz.x) * 0.5, 16.0)
+			# Іконка ідеально вписується всередину рамки зі збереженням пропорцій (як для квадратних іконок, так і для широких М4)
+			var tex_sz := _icon_tex.get_size()
+			var max_dim := Vector2(102.0, 86.0) if tex_sz.x > tex_sz.y * 1.35 else Vector2(86.0, 86.0)
+			var fit_scale := minf(max_dim.x / maxf(tex_sz.x, 1.0), max_dim.y / maxf(tex_sz.y, 1.0))
+			var icon_sz := tex_sz * fit_scale
+			var icon_pos := socket_pos + (socket_sz - icon_sz) * 0.5
 			draw_texture_rect(_icon_tex, Rect2(icon_pos, icon_sz), false)
 
-		# Статусний світлодіод у лівому верхньому куті + бейдж вартості / MAX у правому
-		var led_col := Color(0.42, 0.44, 0.48, 0.9)
+		# Статусний світлодіод з глянцем зліва зверху + цінник праворуч зверху
+		var led_col := Color(0.86, 0.32, 0.28, 0.95)
 		if _maxed:
 			led_col = Color(0.98, 0.82, 0.28, 1.0)
 		elif _can_afford:
-			led_col = Color(0.35, 0.95, 0.50, 1.0)
-		else:
-			led_col = Color(0.85, 0.32, 0.28, 0.85)
-		draw_circle(Vector2(12, 12), 4.5, Color(0.05, 0.05, 0.06, 0.95))
-		draw_circle(Vector2(12, 12), 3.2, led_col)
+			led_col = Color(0.34, 0.96, 0.50, 1.0)
+		draw_circle(Vector2(18.0, 18.0), 5.2, UI_INK)
+		draw_circle(Vector2(18.0, 18.0), 3.6, led_col)
+		draw_circle(Vector2(16.8, 16.8), 1.3, Color(1.0, 1.0, 1.0, 0.72))
 
 		var font := ThemeDB.fallback_font
 		if font != null:
 			var badge_txt := "MAX" if _maxed else ("$%d" % _cost)
-			var badge_col := Color(0.98, 0.86, 0.38) if _maxed else (Color(0.55, 0.98, 0.62) if _can_afford else Color(0.82, 0.55, 0.52))
-			draw_string(font, Vector2(size.x - 48, 16), badge_txt, HORIZONTAL_ALIGNMENT_RIGHT, 42, 12, badge_col)
+			var badge_col := Color(1.0, 0.88, 0.40) if _maxed else (Color(0.56, 0.98, 0.62) if _can_afford else Color(0.95, 0.86, 0.74))
+			draw_string(font, Vector2(size.x - 54.0, 23.0), badge_txt, HORIZONTAL_ALIGNMENT_RIGHT, 44.0, 14, Color(0.0, 0.0, 0.0, 0.92))
+			draw_string(font, Vector2(size.x - 55.0, 22.0), badge_txt, HORIZONTAL_ALIGNMENT_RIGHT, 44.0, 14, badge_col)
 
-			# Назва модуля
+			# Назва модуля із чіткою тінню
 			var short_title := String(_def.get("short_title", ""))
-			draw_string(font, Vector2(4, 108), short_title, HORIZONTAL_ALIGNMENT_CENTER, size.x - 8, 12, Color(0.95, 0.92, 0.84))
+			var title_fs := 11 if short_title.length() > 14 else 13
+			draw_string(font, Vector2(5.0, 166.0), short_title, HORIZONTAL_ALIGNMENT_CENTER, size.x - 8.0, title_fs, Color(0.04, 0.05, 0.06, 0.95))
+			draw_string(font, Vector2(4.0, 165.0), short_title, HORIZONTAL_ALIGNMENT_CENTER, size.x - 8.0, title_fs, Color(0.97, 0.96, 0.90, 1.0))
 
-		# 5 міні-сегментів рівня внизу плитки
-		var pip_w := 21.0
-		var pip_h := 7.0
-		var pip_gap := 4.0
-		var total_w := _max_lvl * pip_w + (_max_lvl - 1) * pip_gap
+		# Округлені міні-сегменти рівня в темних комірках знизу (5 або 6 для броні)
+		var pip_w := 21.0 if _max_lvl <= 5 else 17.0
+		var pip_h := 11.0
+		var pip_gap := 4.0 if _max_lvl <= 5 else 3.5
+		var total_w := float(_max_lvl) * pip_w + float(_max_lvl - 1) * pip_gap
 		var start_x := (size.x - total_w) * 0.5
-		var pip_y := size.y - 16.0
+		var pip_y := size.y - 25.0
 		for i in range(_max_lvl):
-			var pr := Rect2(Vector2(start_x + i * (pip_w + pip_gap), pip_y), Vector2(pip_w, pip_h))
+			var pr := Rect2(Vector2(start_x + float(i) * (pip_w + pip_gap), pip_y), Vector2(pip_w, pip_h))
+			var fill_c := Color(0.06, 0.07, 0.08, 0.98)
+			var hi_c := Color.TRANSPARENT
 			if i < _lvl:
-				draw_rect(pr, accent.lightened(0.12), true)
+				fill_c = accent.lightened(0.10)
+				hi_c = accent.lightened(0.42)
 			elif i == _lvl and _can_afford and (_selected or _hovered):
 				var p_alpha := 0.35 + 0.35 * sin(t_sec * 3.0)
-				draw_rect(pr, Color(accent.r, accent.g, accent.b, p_alpha), true)
-			else:
-				draw_rect(pr, Color(0.06, 0.07, 0.09, 0.95), true)
-			draw_rect(pr, Color(0.32, 0.30, 0.24, 0.85), false, 1.0)
+				fill_c = Color(accent.r, accent.g, accent.b, p_alpha)
+			UpgradeMenu._draw_bevel_rect(self, pr, 3, fill_c, hi_c, Color.TRANSPARENT, UI_INK, 1)
 
-		# Латунні кутові дужки при виборі
+		# Золоті кутові дужки при виборі
 		if _selected:
 			var cl := 10.0
-			var c_col := Color(1.0, 0.90, 0.52, 1.0)
-			draw_line(Vector2(2, 2), Vector2(2 + cl, 2), c_col, 2.5)
-			draw_line(Vector2(2, 2), Vector2(2, 2 + cl), c_col, 2.5)
-			draw_line(Vector2(size.x - 2, 2), Vector2(size.x - 2 - cl, 2), c_col, 2.5)
-			draw_line(Vector2(size.x - 2, 2), Vector2(size.x - 2, 2 + cl), c_col, 2.5)
-			draw_line(Vector2(2, size.y - 2), Vector2(2 + cl, size.y - 2), c_col, 2.5)
-			draw_line(Vector2(2, size.y - 2), Vector2(2, size.y - 2 - cl), c_col, 2.5)
-			draw_line(Vector2(size.x - 2, size.y - 2), Vector2(size.x - 2 - cl, size.y - 2), c_col, 2.5)
-			draw_line(Vector2(size.x - 2, size.y - 2), Vector2(size.x - 2, size.y - 2 - cl), c_col, 2.5)
+			var c_col := Color(1.0, 0.90, 0.48, 1.0)
+			draw_line(Vector2(3, 3), Vector2(3 + cl, 3), c_col, 2.5)
+			draw_line(Vector2(3, 3), Vector2(3, 3 + cl), c_col, 2.5)
+			draw_line(Vector2(size.x - 3, 3), Vector2(size.x - 3 - cl, 3), c_col, 2.5)
+			draw_line(Vector2(size.x - 3, 3), Vector2(size.x - 3, 3 + cl), c_col, 2.5)
+			draw_line(Vector2(3, size.y - 3), Vector2(3 + cl, size.y - 3), c_col, 2.5)
+			draw_line(Vector2(3, size.y - 3), Vector2(3, size.y - 3 - cl), c_col, 2.5)
+			draw_line(Vector2(size.x - 3, size.y - 3), Vector2(size.x - 3 - cl, size.y - 3), c_col, 2.5)
+			draw_line(Vector2(size.x - 3, size.y - 3), Vector2(size.x - 3, size.y - 3 - cl), c_col, 2.5)
 
 
 class _LevelSegmentsCanvas extends Control:
@@ -1217,37 +1615,65 @@ class _LevelSegmentsCanvas extends Control:
 			queue_redraw()
 
 	func _draw() -> void:
-		var gap := 8.0
-		var seg_w := (size.x - gap * float(max_level - 1)) / float(max_level)
-		var seg_h := size.y
+		UpgradeMenu._draw_bevel_rect(self, Rect2(Vector2.ZERO, size), 8, Color(0.085, 0.092, 0.102, 0.98), Color(0.18, 0.20, 0.22, 0.4), Color(0.55, 0.56, 0.52, 0.5), UI_INK, 2)
+
+		var pad := 6.0
+		var gap := 6.0
+		var inner_w := size.x - pad * 2.0
+		var seg_w := (inner_w - gap * float(max_level - 1)) / float(max_level)
+		var seg_h := size.y - 10.0
 		var t_sec := float(Time.get_ticks_msec()) * 0.005
 
 		for i in range(max_level):
-			var r := Rect2(Vector2(i * (seg_w + gap), 0.0), Vector2(seg_w, seg_h))
-			draw_rect(r, Color(0.05, 0.06, 0.08, 0.98), true)
+			var r := Rect2(Vector2(pad + float(i) * (seg_w + gap), 5.0), Vector2(seg_w, seg_h))
+			var fill_c := Color(0.14, 0.15, 0.17, 0.98)
+			var hi_c := Color.TRANSPARENT
+			var border_c := Color(0.28, 0.30, 0.28, 0.95)
 			if i < current_level:
-				var fill_r := r.grow(-3.0)
-				draw_rect(fill_r, accent_color, true)
-				draw_rect(Rect2(fill_r.position, Vector2(fill_r.size.x, fill_r.size.y * 0.38)), accent_color.lightened(0.28), true)
+				fill_c = accent_color
+				hi_c = accent_color.lightened(0.35)
+				border_c = Color(0.95, 0.84, 0.48, 1.0)
 			elif i == current_level and can_afford_next:
-				var pulse := 0.25 + 0.25 * sin(t_sec * 2.2)
-				draw_rect(r.grow(-3.0), Color(accent_color.r, accent_color.g, accent_color.b, pulse), true)
-			draw_rect(r, Color(0.62, 0.54, 0.34, 0.92) if i < current_level else Color(0.32, 0.30, 0.25, 0.85), false, 2.0)
+				var pulse := 0.28 + 0.24 * sin(t_sec * 2.2)
+				fill_c = Color(accent_color.r, accent_color.g, accent_color.b, pulse)
+				border_c = accent_color.lightened(0.15)
+			UpgradeMenu._draw_bevel_rect(self, r, 5, fill_c, hi_c, Color.TRANSPARENT, border_c, 2)
 
 
 class _SoldierShowcaseCanvas extends Control:
 	var soldier_tex: Texture2D = null
+	var weapon_tex: Texture2D = null
 	var skin_id: String = "shades_gold"
 	var filter_mode: String = "bunker"
-	var highlight_uv: Vector2 = Vector2(0.84, 0.48)
-	var highlight_label: String = "ДУЛЬНИЙ ЗРІЗ"
+	var armor_tier: int = 1
+	var display_tier: int = 1
+	var is_armor_preview: bool = false
+	var weapon_tier: int = 1
+	var weapon_display_tier: int = 1
+	var is_weapon_preview: bool = false
+	var highlight_uv: Vector2 = Vector2(0.50, 0.31)
+	var highlight_label: String = "ОЗБРОЄННЯ"
 	var highlight_color: Color = Color(0.94, 0.56, 0.24)
 
 	var _time: float = 0.0
 	var _sparks: Array[Dictionary] = []
 
+	func _get_soldier_rect(bob_y: float = 0.0) -> Rect2:
+		var draw_h := 178.0 if is_weapon_preview else 190.0
+		var aspect := 240.0 / 396.0
+		if soldier_tex != null and soldier_tex.get_size().y > 1.0:
+			aspect = soldier_tex.get_size().x / soldier_tex.get_size().y
+		var draw_w := draw_h * aspect
+		var breath := 1.0 + 0.008 * sin(_time * 2.4)
+		var sw := draw_w * breath
+		var sh := draw_h * breath
+		var cx := size.x * (0.24 if is_weapon_preview else 0.52)
+		var bot_y := size.y - 28.0 + bob_y
+		return Rect2(Vector2(cx - sw * 0.5, bot_y - sh), Vector2(sw, sh))
+
 	func trigger_upgrade_burst(uv: Vector2, col: Color) -> void:
-		var center := Vector2(36.0 + uv.x * 212.0, 14.0 + uv.y * 220.0)
+		var sr := _get_soldier_rect(0.0)
+		var center := sr.position + Vector2(uv.x * sr.size.x, uv.y * sr.size.y)
 		for i in range(22):
 			var ang := randf() * TAU
 			var spd := randf_range(38.0, 135.0)
@@ -1272,78 +1698,112 @@ class _SoldierShowcaseCanvas extends Control:
 
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, size)
-		# Фон тактичного сканера
-		var well_col := Color(0.035, 0.042, 0.052, 0.98)
-		var grid_col := Color(0.68, 0.58, 0.34, 0.09)
+		# Фон тактичного сканера з округленими кутами
+		var well_col := Color(0.052, 0.058, 0.066, 0.99)
+		var grid_col := Color(0.70, 0.62, 0.34, 0.11)
 		match filter_mode:
 			"thermal":
-				well_col = Color(0.07, 0.03, 0.09, 0.98)
+				well_col = Color(0.07, 0.03, 0.09, 0.99)
 				grid_col = Color(0.95, 0.48, 0.18, 0.14)
 			"nvg":
-				well_col = Color(0.02, 0.07, 0.035, 0.98)
+				well_col = Color(0.02, 0.07, 0.035, 0.99)
 				grid_col = Color(0.25, 0.92, 0.45, 0.14)
 			"crt":
-				well_col = Color(0.025, 0.05, 0.08, 0.98)
+				well_col = Color(0.025, 0.05, 0.08, 0.99)
 				grid_col = Color(0.35, 0.82, 0.98, 0.14)
-		draw_rect(r, well_col, true)
+		UpgradeMenu._draw_bevel_rect(self, r, 8, well_col, Color.TRANSPARENT, Color.TRANSPARENT, Color.TRANSPARENT, 0)
 
 		# Тактична координатна сітка + радарні кола
 		for x in range(24, int(size.x), 24):
-			draw_line(Vector2(x, 0), Vector2(x, size.y), grid_col, 1.0)
+			draw_line(Vector2(x, 4), Vector2(x, size.y - 4), grid_col, 1.0)
 		for y in range(24, int(size.y), 24):
-			draw_line(Vector2(0, y), Vector2(size.x, y), grid_col, 1.0)
+			draw_line(Vector2(4, y), Vector2(size.x - 4, y), grid_col, 1.0)
 
-		var center_radar := Vector2(size.x * 0.46, size.y * 0.52)
-		draw_arc(center_radar, 72.0, 0.0, TAU, 48, grid_col * Color(1, 1, 1, 1.6), 1.2)
-		draw_arc(center_radar, 108.0, 0.0, TAU, 64, grid_col * Color(1, 1, 1, 1.2), 1.0)
+		var center_radar := Vector2(size.x * 0.52, size.y * 0.50)
+		draw_arc(center_radar, 66.0, 0.0, TAU, 48, grid_col * Color(1, 1, 1, 1.6), 1.2)
+		draw_arc(center_radar, 100.0, 0.0, TAU, 64, grid_col * Color(1, 1, 1, 1.2), 1.0)
 
-		# Горизонтальна скануюча лінія
-		var scan_y := fmod(_time * 48.0, size.y)
-		draw_line(Vector2(2, scan_y), Vector2(size.x - 2, scan_y), Color(highlight_color.r, highlight_color.g, highlight_color.b, 0.22), 2.0)
+		# Горизонтальна скануюча лінія (підсвічується золотистим у режимі прев'ю броні або зброї)
+		var scan_y := fmod(_time * 48.0, size.y - 8.0) + 4.0
+		var any_preview := is_armor_preview or is_weapon_preview
+		var scan_alpha := 0.34 if any_preview else 0.22
+		draw_line(Vector2(4, scan_y), Vector2(size.x - 4, scan_y), Color(highlight_color.r, highlight_color.g, highlight_color.b, scan_alpha), 2.0)
 
 		# Тінь під ногами бійця
-		var shadow_c := Vector2(120, 224)
+		var soldier_cx := size.x * (0.24 if is_weapon_preview else 0.52)
+		var shadow_c := Vector2(soldier_cx, size.y - 30.0)
 		draw_set_transform(shadow_c, 0.0, Vector2(1.0, 0.28))
-		draw_circle(Vector2.ZERO, 62.0, Color(0, 0, 0, 0.55))
+		draw_circle(Vector2.ZERO, 40.0 if is_weapon_preview else 42.0, Color(0, 0, 0, 0.58))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-		# Малюємо бійця з автоматом з живим диханням
-		var bob_y := sin(_time * 2.4) * 2.2
-		var sprite_origin := Vector2(36.0, 12.0 + bob_y)
-		var sprite_size := Vector2(212.0, 220.0)
+		# Малюємо актуальний варіант броні (або прев'ю наступної броні при наведенні/натисканні)
+		var bob_y := sin(_time * 2.4) * 1.4
+		var sr := _get_soldier_rect(bob_y)
 		if soldier_tex != null:
 			var tint := Color.WHITE
 			if filter_mode == "thermal":
 				tint = Color(1.08, 0.92, 0.78, 1.0)
 			elif filter_mode == "nvg":
 				tint = Color(0.82, 1.08, 0.86, 1.0)
-			draw_texture_rect(soldier_tex, Rect2(sprite_origin, sprite_size), false, tint)
-
-		# Тактичний лазерний промінь з ЛЦВ автомата
-		var laser_start := sprite_origin + Vector2(174.0, 102.0)
-		var laser_end := Vector2(size.x - 4.0, laser_start.y + 19.0)
-		var laser_col := Color(0.98, 0.24, 0.18, 0.55 + 0.25 * sin(_time * 8.0))
-		if skin_id == "shades_cyber":
-			laser_col = Color(0.25, 0.90, 1.0, 0.60 + 0.25 * sin(_time * 8.0))
-		draw_line(laser_start, laser_end, laser_col, 2.0)
-		draw_circle(laser_start, 3.0, laser_col.lightened(0.35))
+			if is_armor_preview:
+				var p_glow := 0.5 + 0.5 * sin(_time * 5.0)
+				var holo_r := sr.grow(4.0)
+				draw_rect(holo_r, Color(0.98, 0.80, 0.28, 0.16 + 0.10 * p_glow), false, 1.5)
+				tint = tint.lerp(Color(1.06, 1.03, 0.94, 1.0), 0.35 + 0.25 * p_glow)
+			draw_texture_rect(soldier_tex, sr, false, tint)
 
 		# Інтерактивний приціл-мітка на вузлі зброї або броні, який зараз обрано
-		var target_pos := sprite_origin + Vector2(highlight_uv.x * sprite_size.x, highlight_uv.y * sprite_size.y)
+		var target_pos := sr.position + Vector2(highlight_uv.x * sr.size.x, highlight_uv.y * sr.size.y)
 		var pulse_r := 13.0 + 3.0 * sin(_time * 5.0)
-		draw_arc(target_pos, pulse_r, 0.0, TAU, 32, Color(highlight_color.r, highlight_color.g, highlight_color.b, 0.92), 2.0)
+		draw_arc(target_pos, pulse_r, 0.0, TAU, 32, Color(highlight_color.r, highlight_color.g, highlight_color.b, 0.94), 2.2)
 		draw_arc(target_pos, pulse_r + 5.0, _time * 1.8, _time * 1.8 + PI * 0.65, 16, highlight_color.lightened(0.25), 2.0)
 		draw_arc(target_pos, pulse_r + 5.0, _time * 1.8 + PI, _time * 1.8 + PI * 1.65, 16, highlight_color.lightened(0.25), 2.0)
-		draw_circle(target_pos, 2.5, Color(1, 0.96, 0.82, 0.95))
+		draw_circle(target_pos, 2.8, Color(1, 0.96, 0.82, 0.95))
+
+		# Велике голографічне прев'ю наступної зброї праворуч від бійця (коли обрано/наведено на "damage"!)
+		var font := ThemeDB.fallback_font
+		if is_weapon_preview and weapon_tex != null:
+			var p_glow := 0.5 + 0.5 * sin(_time * 5.0)
+			var w_box := Rect2(Vector2(114.0, 56.0), Vector2(164.0, 128.0))
+			var w_border := Color(0.98, 0.72, 0.26, 0.82 + 0.16 * p_glow)
+			UpgradeMenu._draw_bevel_rect(self, w_box, 7, Color(0.06, 0.075, 0.09, 0.93), Color(0.24, 0.20, 0.12, 0.35), Color.TRANSPARENT, w_border, 2)
+			draw_line(target_pos, Vector2(w_box.position.x, w_box.get_center().y), Color(w_border.r, w_border.g, w_border.b, 0.65), 1.6)
+			if font != null:
+				draw_string(font, Vector2(w_box.position.x + 6.0, w_box.position.y + 18.0), "МОДЕЛЬ М4 • РІВ.%d" % weapon_display_tier, HORIZONTAL_ALIGNMENT_CENTER, w_box.size.x - 12.0, 11, Color(1.0, 0.88, 0.44))
+			var wt_sz := weapon_tex.get_size()
+			var fit_w := minf((w_box.size.x - 14.0) / maxf(wt_sz.x, 1.0), (w_box.size.y - 36.0) / maxf(wt_sz.y, 1.0))
+			var draw_wsz := wt_sz * fit_w
+			var w_rect := Rect2(
+				Vector2(w_box.position.x + (w_box.size.x - draw_wsz.x) * 0.5, w_box.position.y + 26.0 + (w_box.size.y - 32.0 - draw_wsz.y) * 0.5),
+				draw_wsz
+			)
+			draw_texture_rect(weapon_tex, w_rect, false, Color(1.08, 1.05, 0.96, 1.0))
 
 		# Виноска з назвою вузла у верхньому куті вітрини
-		var callout_box := Rect2(Vector2(8, 8), Vector2(168, 22))
-		draw_rect(callout_box, Color(0.05, 0.06, 0.08, 0.88), true)
-		draw_rect(callout_box, highlight_color, false, 1.5)
-		draw_line(Vector2(callout_box.end.x, callout_box.get_center().y), target_pos, Color(highlight_color.r, highlight_color.g, highlight_color.b, 0.55), 1.5)
-		var font := ThemeDB.fallback_font
+		var callout_txt := highlight_label if any_preview else ("ВУЗОЛ: " + highlight_label)
+		var callout_w := 146.0
 		if font != null:
-			draw_string(font, Vector2(14, 23), "ВУЗОЛ: " + highlight_label, HORIZONTAL_ALIGNMENT_LEFT, 156, 11, highlight_color.lightened(0.25))
+			var measured_w := font.get_string_size(callout_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+			callout_w = clampf(measured_w + 18.0, 120.0, size.x - 16.0)
+		var callout_box := Rect2(Vector2(8, 6), Vector2(callout_w, 20))
+		UpgradeMenu._draw_bevel_rect(self, callout_box, 5, Color(0.06, 0.07, 0.08, 0.92), Color.TRANSPARENT, Color.TRANSPARENT, highlight_color, 2)
+		draw_line(Vector2(callout_box.end.x, callout_box.get_center().y), target_pos, Color(highlight_color.r, highlight_color.g, highlight_color.b, 0.65), 1.6)
+		if font != null:
+			draw_string(font, Vector2(14, 20), callout_txt, HORIZONTAL_ALIGNMENT_LEFT, callout_w - 10.0, 11, highlight_color.lightened(0.28))
+
+		# Нижня плашка поточного рівня спорядження / візуального прев'ю наступного рівня
+		var foot_rect := Rect2(Vector2(8.0, size.y - 25.0), Vector2(size.x - 16.0, 19.0))
+		var foot_col := Color(0.16, 0.14, 0.06, 0.94) if any_preview else Color(0.07, 0.08, 0.10, 0.92)
+		var foot_border := Color(0.98, 0.80, 0.30, 0.98) if any_preview else Color(0.42, 0.46, 0.50, 0.78)
+		UpgradeMenu._draw_bevel_rect(self, foot_rect, 5, foot_col, Color.TRANSPARENT, Color.TRANSPARENT, foot_border, 1)
+		if font != null:
+			var foot_txt := "БРОНЯ: РІВ.%d/7  •  ЗБРОЯ: РІВ.%d/7" % [armor_tier, weapon_tier]
+			if is_armor_preview:
+				foot_txt = "ПРЕВ'Ю БРОНІ: РІВЕНЬ %d → %d" % [armor_tier, display_tier]
+			elif is_weapon_preview:
+				foot_txt = "ПРЕВ'Ю ЗБРОЇ: РІВЕНЬ %d → %d" % [weapon_tier, weapon_display_tier]
+			var foot_txt_col := Color(1.0, 0.90, 0.45, 1.0) if any_preview else Color(0.76, 0.90, 0.98, 0.96)
+			draw_string(font, Vector2(foot_rect.position.x + 4.0, foot_rect.position.y + 14.0), foot_txt, HORIZONTAL_ALIGNMENT_CENTER, foot_rect.size.x - 8.0, 11, foot_txt_col)
 
 		# Іскри при покупці покращення або зміні скіна
 		for s in _sparks:
@@ -1353,8 +1813,8 @@ class _SoldierShowcaseCanvas extends Control:
 			var p: Vector2 = s["pos"]
 			draw_circle(p, 2.8 * ratio, c)
 
-		# Металева рамка вітрини
-		draw_rect(r, Color(0.56, 0.48, 0.30, 0.95), false, 2.0)
+		# Броньована рамка вітрини зверху всього
+		UpgradeMenu._draw_bevel_rect(self, r, 8, Color.TRANSPARENT, Color.TRANSPARENT, Color.TRANSPARENT, UI_INK, 3)
 
 
 class _AtmosphereFilterCanvas extends Control:
@@ -1363,13 +1823,13 @@ class _AtmosphereFilterCanvas extends Control:
 	var _embers: Array[Dictionary] = []
 
 	func _ready() -> void:
-		for i in range(28):
+		for i in range(22):
 			_embers.append({
 				"x": randf() * 1280.0,
 				"y": randf() * 720.0,
-				"vx": randf_range(-14.0, 18.0),
-				"vy": randf_range(-28.0, -10.0),
-				"sz": randf_range(1.4, 3.2),
+				"vx": randf_range(-12.0, 16.0),
+				"vy": randf_range(-24.0, -8.0),
+				"sz": randf_range(1.2, 2.8),
 				"phase": randf() * TAU,
 			})
 
@@ -1386,30 +1846,27 @@ class _AtmosphereFilterCanvas extends Control:
 		if w <= 1.0 or h <= 1.0:
 			return
 
-		# Tinted atmosphere overlay per filter
 		match filter_mode:
 			"thermal":
-				draw_rect(Rect2(0, 0, w, h), Color(0.24, 0.06, 0.18, 0.14), true)
+				draw_rect(Rect2(0, 0, w, h), Color(0.24, 0.06, 0.18, 0.12), true)
 			"nvg":
-				draw_rect(Rect2(0, 0, w, h), Color(0.04, 0.26, 0.10, 0.14), true)
+				draw_rect(Rect2(0, 0, w, h), Color(0.04, 0.26, 0.10, 0.12), true)
 			"crt":
-				draw_rect(Rect2(0, 0, w, h), Color(0.04, 0.16, 0.26, 0.12), true)
-			_:
-				draw_rect(Rect2(0, 0, w, h), Color(0.18, 0.13, 0.05, 0.06), true)
+				draw_rect(Rect2(0, 0, w, h), Color(0.04, 0.16, 0.26, 0.10), true)
 
-		# Тонкі CRT скан-лінії
-		var line_col := Color(0, 0, 0, 0.12)
+		# Ледь помітна кінематографічна сітка без затемнення інтерфейсу
+		var line_col := Color(0, 0, 0, 0.04)
 		for y in range(0, int(h), 4):
 			draw_line(Vector2(0, y), Vector2(w, y), line_col, 1.0)
 
-		# Плаваючі іскри / пил в повітрі
+		# Плаваючі іскри в повітрі
 		for e in _embers:
 			var glow := 0.35 + 0.35 * sin(_t * 2.5 + float(e["phase"]))
-			var ecol := Color(0.98, 0.76, 0.32, glow * 0.55)
+			var ecol := Color(0.98, 0.76, 0.32, glow * 0.42)
 			if filter_mode == "nvg":
-				ecol = Color(0.38, 0.98, 0.55, glow * 0.55)
+				ecol = Color(0.38, 0.98, 0.55, glow * 0.45)
 			elif filter_mode == "crt":
-				ecol = Color(0.42, 0.86, 1.0, glow * 0.55)
+				ecol = Color(0.42, 0.86, 1.0, glow * 0.45)
 			elif filter_mode == "thermal":
-				ecol = Color(1.0, 0.48, 0.22, glow * 0.60)
+				ecol = Color(1.0, 0.48, 0.22, glow * 0.48)
 			draw_circle(Vector2(float(e["x"]), float(e["y"])), float(e["sz"]), ecol)

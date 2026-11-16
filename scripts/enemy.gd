@@ -1258,7 +1258,7 @@ func _get_trench_x() -> float:
 	var p := _find_player()
 	if p != null:
 		return minf(p.global_position.x, 260.0)
-	return 185.0
+	return 212.0
 
 
 func _create_target_marker() -> void:

@@ -18,7 +18,7 @@ enum Phase {
 
 const BLADE_TEX := preload("res://assets/heli_blade.png")
 const HELI_VOICE_STREAM := preload("res://assets/heli_voice.mp3")
-const TRENCH_X := 185.0
+const TRENCH_X := 212.0
 const TRENCH_TILES_Y: Array[float] = [395.0, 495.0, 595.0]
 
 # Координати в пікселях текстури heli_body.png (центр спрайта = 0,0), ніс дивиться вліво

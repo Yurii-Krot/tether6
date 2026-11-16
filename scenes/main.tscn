@@ -23,7 +23,7 @@ stretch_mode = 0
 script = ExtResource("3_wm")
 
 [node name="Player" parent="." unique_id=1556416161 instance=ExtResource("2_sugp2")]
-position = Vector2(185, 495)
+position = Vector2(212, 495)
 
 [node name="UI" type="CanvasLayer" parent="." unique_id=201100404]
 
