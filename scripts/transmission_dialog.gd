@@ -128,7 +128,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _load_portraits() -> void:
-	var hero_tex := ResourceLoader.load("res://assets/portrait_hero.png") as Texture2D
+	var hero_path := "res://assets/portrait_hero.png"
+	match GameState.hero_skin:
+		"shades_gold":
+			hero_path = "res://assets/portrait_hero_shades_gold.png"
+		"shades_cyber":
+			hero_path = "res://assets/portrait_hero_shades_cyber.png"
+		"shades_black":
+			hero_path = "res://assets/portrait_hero_shades_black.png"
+	var hero_tex := ResourceLoader.load(hero_path) as Texture2D
 	var enemy_tex := ResourceLoader.load("res://assets/portrait_enemy_gray.png") as Texture2D
 	_portraits["hero"] = hero_tex
 	_portraits["enemy"] = enemy_tex
