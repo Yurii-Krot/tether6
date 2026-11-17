@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://b0j1rpe7d22dc" path="res://scripts/enemy.gd" id="1_enemy"]
 [ext_resource type="Texture2D" path="res://assets/axe_thrower_spritesheet.png" id="2_axe_sheet"]
+[ext_resource type="AudioStream" path="res://assets/throw_whoosh.mp3" id="3_throw_sfx"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_axe_thrower"]
 size = Vector2(70, 122)
@@ -41,5 +42,6 @@ width = 2.0
 default_color = Color(1, 0.68, 0.2, 0.9)
 
 [node name="ShotSound" type="AudioStreamPlayer" parent="." unique_id=191500606]
-volume_db = -4.0
-max_polyphony = 2
+stream = ExtResource("3_throw_sfx")
+volume_db = -2.0
+max_polyphony = 3

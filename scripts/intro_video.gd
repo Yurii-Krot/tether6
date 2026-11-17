@@ -52,18 +52,21 @@ func _process(delta: float) -> void:
 		_begin_fade_out_to_menu(NATURAL_FADE_OUT_DURATION)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if _is_transitioning or _elapsed < 0.2:
+func _input(event: InputEvent) -> void:
+	if _is_transitioning or _elapsed < 0.08:
 		return
 	var wants_skip := false
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT or event.button_index == MOUSE_BUTTON_RIGHT:
-			wants_skip = true
-	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode in [KEY_ESCAPE, KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if (
+			event.keycode in [KEY_ESCAPE, KEY_SPACE]
+			or event.physical_keycode in [KEY_ESCAPE, KEY_SPACE]
+			or event.is_action_pressed("ui_cancel")
+		):
 			wants_skip = true
 	if wants_skip:
-		get_viewport().set_input_as_handled()
+		var vp := get_viewport()
+		if vp != null:
+			vp.set_input_as_handled()
 		_begin_fade_out_to_menu(SKIP_FADE_OUT_DURATION)
 
 

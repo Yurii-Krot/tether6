@@ -3,8 +3,10 @@ extends Node2D
 const GAME_STATE := preload("res://scripts/game_state.gd")
 const PAUSE_MENU_SCRIPT := preload("res://scripts/pause_menu.gd")
 const TRANSMISSION_DIALOG_SCRIPT := preload("res://scripts/transmission_dialog.gd")
+const BATTLE_END_DIALOG_SCRIPT := preload("res://scripts/battle_end_dialog.gd")
 const BATTLE_BGM_STREAM := preload("res://assets/battle_bgm.mp3")
 const BOSS_BGM_STREAM := preload("res://assets/boss_bgm.mp3")
+const BATTLE_RESULT_SFX_STREAM := preload("res://assets/battle_result.mp3")
 const UPGRADE_SCENE_PATH := "res://scenes/upgrade_menu.tscn"
 const MAIN_MENU_SCENE_PATH := "res://scenes/main_menu.tscn"
 const PROGRESS_TRACK_WIDTH := 356.0
@@ -16,9 +18,11 @@ var _campaign_won := false
 var _elapsed_time := 0.0
 var _level_earned := 0
 var _bgm_player: AudioStreamPlayer = null
+var _result_sfx_player: AudioStreamPlayer = null
 var _pause_menu: PauseMenu = null
 var _pause_hud_btn: Button = null
 var _intro_dialog: TransmissionDialog = null
+var _battle_end_dialog: BattleEndDialog = null
 
 # Смужка прогресу рівня з повзунком справа зверху
 var _progress_panel: ColorRect = null
@@ -37,6 +41,7 @@ var _displayed_progress := 0.0
 func _ready() -> void:
 	_level_earned = 0
 	GAME_STATE.apply_audio_settings()
+	GAME_STATE.stop_menu_bgm(get_tree(), 0.0)
 	_start_battle_bgm()
 	_create_top_right_progress_bar()
 	_create_pause_hud_button()
@@ -72,12 +77,6 @@ func _process(delta: float) -> void:
 	_update_progress_bar(delta)
 	if not _game_over and _intro_dialog == null:
 		_elapsed_time += delta
-	elif _game_over and not _transitioning and Input.is_action_just_pressed("ui_accept"):
-		if _campaign_won:
-			GAME_STATE.reset_campaign()
-			_fade_to_scene(MAIN_MENU_SCENE_PATH)
-		else:
-			_fade_to_scene(UPGRADE_SCENE_PATH)
 
 
 func _show_level_1_intro_dialog() -> void:
@@ -336,20 +335,23 @@ func _on_all_waves_cleared() -> void:
 	_level_earned += clear_bonus
 	GAME_STATE.last_level_earned = _level_earned
 	_update_hud()
+	if banner_label:
+		banner_label.text = ""
+	if _pause_menu:
+		_pause_menu.set_can_toggle_pause(false)
+	if _pause_hud_btn:
+		_pause_hud_btn.visible = false
 
 	var finished_level := GAME_STATE.current_level
 	if finished_level < GAME_STATE.TOTAL_LEVELS:
 		GAME_STATE.current_level += 1
-		banner_label.modulate = Color(0.75, 1.0, 0.75, 1.0)
-		banner_label.text = "РІВЕНЬ %d ПРОЙДЕНО!\nЗароблено за бій: +$%d" % [finished_level, _level_earned]
-		var wait_tween := create_tween()
-		wait_tween.tween_interval(1.35)
-		wait_tween.tween_callback(_fade_to_scene.bind(UPGRADE_SCENE_PATH))
 	else:
 		_campaign_won = true
 		GAME_STATE.current_level = GAME_STATE.TOTAL_LEVELS + 1
-		banner_label.modulate = Color(1.0, 0.92, 0.4, 1.0)
-		banner_label.text = "ПЕРЕМОГА! Всі %d рівнів пройдено!\nЗагальний баланс: $%d\n[Enter — у головне меню]" % [GAME_STATE.TOTAL_LEVELS, GAME_STATE.coins]
+
+	var wait_tween := create_tween()
+	wait_tween.tween_interval(0.55)
+	wait_tween.tween_callback(_show_battle_end_dialog.bind(true, _campaign_won, finished_level))
 
 
 func _on_player_died() -> void:
@@ -357,11 +359,90 @@ func _on_player_died() -> void:
 		return
 	_game_over = true
 	GAME_STATE.last_level_earned = _level_earned
-	banner_label.modulate = Color(1.0, 0.42, 0.42, 1.0)
-	banner_label.text = "ПОРАЗКА! Відступаємо у вікно покращень...\n(Зароблено: +$%d)" % _level_earned
+	if banner_label:
+		banner_label.text = ""
+	if _pause_menu:
+		_pause_menu.set_can_toggle_pause(false)
+	if _pause_hud_btn:
+		_pause_hud_btn.visible = false
+
 	var wait_tween := create_tween()
-	wait_tween.tween_interval(2.25)
-	wait_tween.tween_callback(_fade_to_scene.bind(UPGRADE_SCENE_PATH))
+	wait_tween.tween_interval(1.10)
+	wait_tween.tween_callback(_show_battle_end_dialog.bind(false, false, GAME_STATE.current_level))
+
+
+func _show_battle_end_dialog(is_victory: bool, is_campaign_won: bool, finished_level: int) -> void:
+	if _battle_end_dialog != null or not is_inside_tree():
+		return
+
+	var total_upg_levels := 0
+	var cheapest_cost := 99999999
+	var can_afford_any := false
+	for key in GAME_STATE.upgrade_levels.keys():
+		var k := String(key)
+		total_upg_levels += GAME_STATE.get_upgrade_level(k)
+		if GAME_STATE.can_upgrade(k):
+			var c := GAME_STATE.get_upgrade_cost(k)
+			cheapest_cost = mini(cheapest_cost, c)
+			if GAME_STATE.coins >= c:
+				can_afford_any = true
+
+	var hint_text := ""
+	if is_campaign_won:
+		hint_text = "Усі 15 рівнів успішно завершено!"
+	elif cheapest_cost >= 99999999:
+		hint_text = "Усі модулі арсеналу на максимумі"
+	elif can_afford_any:
+		hint_text = "Доступне покращення в арсеналі (від $%d)" % cheapest_cost
+	else:
+		hint_text = "До наступного покращення: $%d / $%d" % [GAME_STATE.coins, cheapest_cost]
+
+	var killed := wave_manager.killed_enemy_soldiers if wave_manager != null else 0
+	var dialog := BATTLE_END_DIALOG_SCRIPT.new() as BattleEndDialog
+	dialog.setup(
+		is_victory,
+		is_campaign_won,
+		finished_level,
+		_level_earned,
+		GAME_STATE.coins,
+		killed,
+		total_upg_levels,
+		can_afford_any,
+		hint_text
+	)
+	dialog.continue_pressed.connect(_on_battle_end_continue)
+	_battle_end_dialog = dialog
+	add_child(dialog)
+	_play_battle_result_sfx()
+
+
+func _on_battle_end_continue() -> void:
+	if _campaign_won:
+		GAME_STATE.reset_campaign()
+		_fade_to_scene(MAIN_MENU_SCENE_PATH)
+	else:
+		_fade_to_scene(UPGRADE_SCENE_PATH)
+
+
+func _play_battle_result_sfx() -> void:
+	if _bgm_player != null and is_instance_valid(_bgm_player) and _bgm_player.playing:
+		var bgm_fade := create_tween()
+		bgm_fade.tween_property(_bgm_player, "volume_db", -40.0, 0.30)
+		bgm_fade.tween_callback(func() -> void:
+			if _bgm_player != null and is_instance_valid(_bgm_player):
+				_bgm_player.stop()
+		)
+	if _result_sfx_player != null and is_instance_valid(_result_sfx_player):
+		_result_sfx_player.queue_free()
+	var sfx_stream: AudioStream = BATTLE_RESULT_SFX_STREAM
+	if sfx_stream is AudioStreamMP3:
+		(sfx_stream as AudioStreamMP3).loop = false
+	_result_sfx_player = AudioStreamPlayer.new()
+	_result_sfx_player.name = "BattleResultSFX"
+	_result_sfx_player.stream = sfx_stream
+	_result_sfx_player.volume_db = -3.0
+	add_child(_result_sfx_player)
+	_result_sfx_player.play()
 
 
 func _start_battle_bgm() -> void:
@@ -388,6 +469,9 @@ func _exit_tree() -> void:
 	if _bgm_player != null and is_instance_valid(_bgm_player):
 		_bgm_player.stop()
 		_bgm_player.stream = null
+	if _result_sfx_player != null and is_instance_valid(_result_sfx_player):
+		_result_sfx_player.stop()
+		_result_sfx_player.stream = null
 
 
 func _setup_pause_menu() -> void:

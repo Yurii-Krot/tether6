@@ -660,6 +660,9 @@ func _launch_axe_projectile(release_pos: Vector2) -> void:
 		var axe: Node2D = AXE_PROJECTILE_SCRIPT.new()
 		axe.setup(release_pos, target_tile, attack_damage, axe_flight_duration)
 		parent_node.add_child(axe)
+	if shot_sound and shot_sound.stream != null:
+		shot_sound.pitch_scale = randf_range(0.95, 1.08)
+		shot_sound.play()
 
 
 func _start_hammer_sweep_barrage() -> void:
@@ -687,9 +690,6 @@ func _trigger_hammer_sweep_throw(tile_idx: int, is_final_throw: bool) -> void:
 	if body_sprite:
 		var is_six_row := body_sprite.vframes >= 6
 		body_sprite.frame_coords = Vector2i(2 if is_six_row else 0, 2 if is_six_row else ENEMY_ROW_SHOOT)
-	if shot_sound and shot_sound.stream != null:
-		shot_sound.pitch_scale = randf_range(0.86, 1.04)
-		shot_sound.play()
 
 	var release_delay := _shoot_anim_duration * (5.0 / 11.0)
 	_pending_hammer_throws.append({
@@ -707,6 +707,9 @@ func _launch_hammer_projectile(release_pos: Vector2, tile_idx: int) -> void:
 		var hammer: Node2D = AXE_PROJECTILE_SCRIPT.new()
 		hammer.setup(release_pos, target_tile, attack_damage, hammer_flight_duration, true)
 		parent_node.add_child(hammer)
+	if shot_sound and shot_sound.stream != null:
+		shot_sound.pitch_scale = randf_range(0.84, 0.96)
+		shot_sound.play()
 
 
 func _process_exhaust_smoke(delta: float) -> void:
@@ -781,7 +784,7 @@ func _perform_attack(muzzle_pos: Vector2) -> void:
 		body_sprite.frame_coords = Vector2i(1 if is_six_row else 0, 2 if is_six_row else ENEMY_ROW_SHOOT)
 		if not use_trench_tile_launcher and not use_axe_throw:
 			_spawn_enemy_shell()
-	if shot_sound and shot_sound.stream != null:
+	if not use_axe_throw and shot_sound and shot_sound.stream != null:
 		shot_sound.pitch_scale = randf_range(0.76, 0.84) if use_trench_tile_launcher else (randf_range(0.96, 1.04) if not use_sniper_laser else randf_range(0.98, 1.02))
 		shot_sound.play()
 

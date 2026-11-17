@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://b0j1rpe7d22dc" path="res://scripts/enemy.gd" id="1_enemy"]
 [ext_resource type="Texture2D" path="res://assets/boss_hammer_spritesheet.png" id="2_boss_sheet"]
-[ext_resource type="AudioStream" path="res://assets/rocket_launch.ogg" id="3_throw_sfx"]
+[ext_resource type="AudioStream" path="res://assets/throw_whoosh.mp3" id="3_throw_sfx"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_boss_hammer"]
 size = Vector2(150, 256)
@@ -49,5 +49,5 @@ default_color = Color(1, 0.45, 0.2, 0.9)
 
 [node name="ShotSound" type="AudioStreamPlayer" parent="." unique_id=191600606]
 stream = ExtResource("3_throw_sfx")
-volume_db = -6.0
+volume_db = -1.5
 max_polyphony = 6

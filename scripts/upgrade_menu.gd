@@ -5,6 +5,7 @@ const GAME_SCENE_PATH := "res://scenes/main.tscn"
 const MAIN_MENU_SCENE_PATH := "res://scenes/main_menu.tscn"
 const GAME_STATE := preload("res://scripts/game_state.gd")
 const TEX_BTN_BACK := preload("res://assets/btn_back.png")
+const UPGRADE_BUY_SFX_STREAM := preload("res://assets/upgrade_buy.mp3")
 
 const TEX_SOLDIER_STD := preload("res://assets/player.png")
 const TEX_SOLDIER_GOLD := preload("res://assets/player_shades_gold.png")
@@ -65,7 +66,7 @@ const UPGRADE_DEFS: Array[Dictionary] = [
 		"title": "Поліпшені Бронебійні Патрони",
 		"category": "weapon",
 		"category_label": "МОДУЛЬ ЗБРОЇ",
-		"desc": "Високошвидкісні кулі з вольфрамовим осердям: вища швидкість польоту та шанс критичного пострілу (x1.75 урону).",
+		"desc": "На початку стрільби випускає залп із кількох куль зі спаданням на кожному пострілі (напр. 3→2→1), а також підвищує швидкість кулі та шанс криту.",
 		"accent": Color(0.96, 0.44, 0.30, 1.0),
 		"part_uv": Vector2(0.52, 0.37),
 		"part_name": "БОЄКОМПЛЕКТ",
@@ -157,6 +158,7 @@ var _atmosphere_overlay: _AtmosphereFilterCanvas = null
 
 # Procedural audio
 var _sfx_player: AudioStreamPlayer = null
+var _buy_sfx_player: AudioStreamPlayer = null
 var _sfx_click: AudioStreamWAV = null
 var _sfx_buy: AudioStreamWAV = null
 var _sfx_skin: AudioStreamWAV = null
@@ -168,6 +170,7 @@ var _dev_add_coins_button: Button = null
 
 func _ready() -> void:
 	GAME_STATE.apply_audio_settings()
+	GAME_STATE.start_menu_bgm(get_tree(), 0.45)
 	if DisplayServer.get_name() != "headless":
 		Input.set_custom_mouse_cursor(null)
 
@@ -714,13 +717,15 @@ func _refresh_ui() -> void:
 			skin_name = "Стандартний Шолом"
 		var dps := float(GAME_STATE.get_player_bullet_damage()) * 10.0
 		var crit_pct := int(round(GAME_STATE.get_player_crit_chance() * 100.0))
+		var burst_bullets := GAME_STATE.get_player_opening_burst_bullets()
+		var burst_str := ("1 куля" if burst_bullets <= 1 else "%d→…→1" % burst_bullets)
 		var coin_pct := int(round((GAME_STATE.get_coin_multiplier() - 1.0) * 100.0))
 		_stats_summary_label.text = (
 			"[color=#dfc478][b]ЗВЕДЕННЯ ОПЕРАТИВНИКА[/b][/color]\n[color=#8fa4b8]Скін: %s[/color]\n" % skin_name
 			+ "• Зброя: [color=#ffd070][b]Рівень %d / 7[/b][/color]  |  Броня: [color=#7cd6ff][b]Рів.%d/7[/b][/color]\n" % [equipped_weapon_tier, equipped_tier]
 			+ "• Здоров'я: [color=#ff8a7a][b]%d HP[/b][/color]\n" % int(roundf(GAME_STATE.get_player_max_health()))
 			+ "• Урон автомата: [color=#ffb85c][b]%d[/b][/color]  |  Темп: [color=#ffd86b][b]10.0/с[/b][/color]\n" % int(roundf(GAME_STATE.get_player_bullet_damage()))
-			+ "• Вогнева потужність: [color=#ffe28a][b]%d DPS[/b][/color]\n" % int(round(dps))
+			+ "• Залп: [color=#ffe28a][b]%s[/b][/color]  |  Вогнева міць: [color=#ffe28a][b]%d DPS[/b][/color]\n" % [burst_str, int(round(dps))]
 			+ "• Швидк. кулі: [color=#e5d29c][b]%d[/b][/color]  |  Крит (×1.75): [color=#ff7a66][b]%d%%[/b][/color]\n" % [int(roundf(GAME_STATE.get_player_bullet_speed())), crit_pct]
 			+ "• Польова аптечка [2]: [color=#6ee89a][b]КД %dс[/b][/color]\n" % int(round(GAME_STATE.get_player_medkit_cooldown()))
 			+ "• Граната М67 [1]: [color=#ff9e5e][b]%d урону[/b][/color] (КД [b]%dс[/b])\n" % [int(roundf(GAME_STATE.get_player_grenade_damage())), int(round(GAME_STATE.get_player_grenade_cooldown()))]
@@ -802,7 +807,12 @@ func _get_stat_comparison_strings(key: String, lvl: int) -> Array[String]:
 		"damage":
 			return ["Зброя Рів.%d • %d урону" % [1 + lvl, 10 + lvl * 3], "Зброя Рів.%d • %d урону (+3)" % [1 + nl, 10 + nl * 3]]
 		"ammo":
-			return ["Крит %d%% (x1.75) | Швидк. %d" % [lvl * 8, 1380 + lvl * 130], "Крит %d%% (+8%%) | Швидк. %d" % [nl * 8, 1380 + nl * 130]]
+			var cur_burst := ("1 куля" if lvl == 0 else "Залп %d→…→1" % (1 + lvl))
+			var next_burst := "Залп %d→…→1" % (1 + nl)
+			return [
+				"%s • Крит %d%%" % [cur_burst, lvl * 8],
+				"%s • Крит %d%%" % [next_burst, nl * 8]
+			]
 		"hp":
 			return ["Броня Рів.%d • %d HP" % [1 + lvl, 100 + lvl * 25], "Броня Рів.%d • %d HP (+25)" % [1 + nl, 100 + nl * 25]]
 		"medkit":
@@ -883,7 +893,8 @@ func _on_buy_selected_pressed() -> void:
 	if _is_transitioning:
 		return
 	if GAME_STATE.try_buy_upgrade(_selected_key):
-		_play_sfx(_sfx_buy, -3.5)
+		if _buy_sfx_player != null:
+			_buy_sfx_player.play()
 		var def := _get_def(_selected_key)
 		if _showcase_canvas != null:
 			_showcase_canvas.trigger_upgrade_burst(def["part_uv"], def["accent"])
@@ -1033,6 +1044,7 @@ func _on_test_level_10_wave_pressed() -> void:
 func _start_battle_transition() -> void:
 	_is_transitioning = true
 	_play_sfx(_sfx_skin, -3.5)
+	GAME_STATE.stop_menu_bgm(get_tree(), 0.35)
 	var tw := create_tween()
 	tw.tween_property(next_button, "scale", Vector2(0.95, 0.95), 0.07).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(next_button, "scale", Vector2(1.02, 1.02), 0.08).set_trans(Tween.TRANS_SINE)
@@ -1047,6 +1059,16 @@ func _enter_battle() -> void:
 # ── Процедурні звукові ефекти терміналу ──────────────────────────────────────
 
 func _init_audio() -> void:
+	var buy_stream: AudioStream = UPGRADE_BUY_SFX_STREAM
+	if buy_stream is AudioStreamMP3:
+		(buy_stream as AudioStreamMP3).loop = false
+	_buy_sfx_player = AudioStreamPlayer.new()
+	_buy_sfx_player.name = "UpgradeBuySFX"
+	_buy_sfx_player.stream = buy_stream
+	_buy_sfx_player.volume_db = 0.0
+	_buy_sfx_player.max_polyphony = 3
+	add_child(_buy_sfx_player)
+
 	if DisplayServer.get_name() == "headless":
 		return
 	_sfx_player = AudioStreamPlayer.new()

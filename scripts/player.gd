@@ -117,6 +117,8 @@ const DEATH_FRAME_TIMES: Array[float] = [
 @export var max_health := 100.0
 @export var recoil_distance := 4.5
 @export var recoil_recovery_speed := 45.0
+const OPENING_BURST_STACK_SPACING := 3.5
+const OPENING_BURST_SPREAD_DEG := 2.3
 
 @export_group("Trench Roll")
 @export var trench_min_y := 390.0
@@ -138,6 +140,8 @@ const DEATH_FRAME_TIMES: Array[float] = [
 var ammo := 30
 var health := 100.0
 var crit_chance := 0.0
+var opening_burst_max := 1
+var _opening_burst_count := 1
 var cooldown := 0.0
 # У стані спокою боєць за замовчуванням захований в окопі (не отримує урон)
 var is_in_cover := true
@@ -222,6 +226,7 @@ var _require_shoot_release := false
 @onready var status_label: Label = $HUD/StatusLabel
 @onready var shot_sound: AudioStreamPlayer = $ShotSound
 @onready var reload_sound: AudioStreamPlayer = $ReloadSound
+@onready var heal_sound: AudioStreamPlayer = get_node_or_null("HealSound") as AudioStreamPlayer
 
 
 func _ready() -> void:
@@ -232,6 +237,8 @@ func _ready() -> void:
 	damage = float(GAME_STATE.get_player_bullet_damage())
 	bullet_speed = GAME_STATE.get_player_bullet_speed()
 	crit_chance = GAME_STATE.get_player_crit_chance()
+	opening_burst_max = maxi(1, GAME_STATE.get_player_opening_burst_bullets())
+	_opening_burst_count = opening_burst_max
 	heal_cooldown = GAME_STATE.get_player_medkit_cooldown()
 	grenade_damage = float(GAME_STATE.get_player_grenade_damage())
 	grenade_cooldown = GAME_STATE.get_player_grenade_cooldown()
@@ -335,6 +342,9 @@ func _process(delta: float) -> void:
 	var busy_action := (_grenade_throw_timer > 0.0) or (_heal_anim_timer > 0.0)
 	var force_cover := (not inputs_blocked) and Input.is_action_pressed("cover") and not busy_action
 	var wants_to_shoot := (not inputs_blocked) and Input.is_action_pressed("shoot") and ammo > 0 and not force_cover and not is_rolling and not busy_action
+
+	if not wants_to_shoot:
+		reset_opening_burst()
 
 	if wants_to_shoot or busy_action:
 		_combat_expose_timer = 0.16
@@ -468,27 +478,46 @@ func _update_sprite_frame_animation(delta: float) -> void:
 		_set_weapon_frame(0)
 
 
+func reset_opening_burst() -> void:
+	_opening_burst_count = maxi(1, opening_burst_max)
+
+
 func shoot(aim: Vector2) -> void:
 	var origin := muzzle.global_position
 	var target_pos := aim
 	if target_pos.x < origin.x + 40.0:
 		target_pos = origin + Vector2.RIGHT.rotated(weapon_pivot.rotation) * 900.0
 
+	var volley_count := clampi(_opening_burst_count, 1, maxi(opening_burst_max, 1))
+	_opening_burst_count = maxi(1, volley_count - 1)
+
+	var aim_dir := (target_pos - origin).normalized()
+	if aim_dir.length_squared() < 0.001:
+		aim_dir = Vector2.RIGHT
+	var stack_axis := Vector2(-aim_dir.y, aim_dir.x)
+	var travel_dist := maxf((target_pos - origin).length(), 900.0)
+
 	var parent_node := get_parent()
 	if parent_node != null:
-		var shot_damage := damage
-		if crit_chance > 0.0 and randf() < crit_chance:
-			shot_damage = roundf(damage * 1.75)
-		var proj := Projectile.new()
-		proj.setup(
-			Projectile.BulletType.PLAYER_YELLOW,
-			origin,
-			target_pos,
-			shot_damage,
-			bullet_speed,
-			false
-		)
-		parent_node.add_child(proj)
+		for i in range(volley_count):
+			var idx_centered := float(i) - float(volley_count - 1) * 0.5
+			var start_i := origin + stack_axis * (idx_centered * OPENING_BURST_STACK_SPACING)
+			var spread_rad := deg_to_rad(idx_centered * OPENING_BURST_SPREAD_DEG)
+			var dir_i := aim_dir.rotated(spread_rad)
+			var target_i := start_i + dir_i * travel_dist
+			var shot_damage := damage
+			if crit_chance > 0.0 and randf() < crit_chance:
+				shot_damage = roundf(damage * 1.75)
+			var proj := Projectile.new()
+			proj.setup(
+				Projectile.BulletType.PLAYER_YELLOW,
+				start_i,
+				target_i,
+				shot_damage,
+				bullet_speed,
+				false
+			)
+			parent_node.add_child(proj)
 
 	_trigger_shot_feedback()
 
@@ -531,9 +560,9 @@ func _start_heal() -> void:
 	_combat_expose_timer = heal_anim_duration + 0.06
 	if is_in_cover:
 		_set_cover(false)
-	if reload_sound:
-		reload_sound.pitch_scale = 1.28
-		reload_sound.play()
+	if heal_sound:
+		heal_sound.pitch_scale = 1.0
+		heal_sound.play()
 	_update_hud()
 
 
@@ -837,9 +866,6 @@ func _set_cover(active: bool) -> void:
 		body.frame_coords = Vector2i(0, ANIM_ROW_CROUCH)
 		muzzle_flash.visible = false
 		tracer_line.visible = false
-		if ammo < magazine_size:
-			reload_sound.pitch_scale = 0.95
-			reload_sound.play()
 	else:
 		if _damage_tint_timer <= 0.0:
 			body.modulate = Color.WHITE
@@ -875,8 +901,6 @@ func _process_reload_in_cover(delta: float) -> void:
 		ammo_changed.emit(ammo, magazine_size)
 		if ammo == magazine_size:
 			_reload_accumulator = 0.0
-			reload_sound.pitch_scale = 1.12
-			reload_sound.play()
 		_update_hud()
 
 

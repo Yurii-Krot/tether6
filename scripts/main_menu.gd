@@ -20,6 +20,7 @@ var _test_lvl10_btn: Button = null
 
 func _ready() -> void:
 	GAME_STATE.apply_audio_settings()
+	GAME_STATE.start_menu_bgm(get_tree(), 0.45)
 
 	_settings_popup = PAUSE_MENU_SCRIPT.new()
 	_settings_popup.set_can_toggle_pause(false)
@@ -145,6 +146,7 @@ func _on_test_level_10_pressed(skip_to_boss: bool) -> void:
 	if _test_lvl10_btn:
 		_test_lvl10_btn.disabled = true
 	GAME_STATE.jump_to_test_level_10(skip_to_boss)
+	GAME_STATE.stop_menu_bgm(get_tree(), 0.42)
 	_fade_to_scene(_start_test_battle_scene)
 
 

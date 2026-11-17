@@ -20,8 +20,9 @@ signal enemy_killed(unit_type: String, world_pos: Vector2, reward: int)
 @export var boss_hammer_scene: PackedScene = preload("res://scenes/boss_hammer.tscn")
 @export var sniper_scene: PackedScene = preload("res://scenes/sniper.tscn")
 @export var helicopter_scene: PackedScene = preload("res://scenes/helicopter.tscn")
-@export var spawn_interval := 2.3
-@export var delay_between_waves := 3.0
+@export var spawn_interval := 1.15
+@export var delay_between_waves := 2.0
+@export var max_concurrent_enemies := 12
 @export var infantry_spawn_x := 1265.0
 @export var spawn_y_min := 355.0
 @export var spawn_y_max := 595.0
@@ -56,6 +57,8 @@ var _spawn_queue: Array[String] = []
 var _alive_enemies: Dictionary = {}
 var _rewarded_enemies: Dictionary = {}
 var _pending_formation_spawns := 0
+var _pending_heli_drops := 0
+var _was_spawn_capped := false
 var _wave_generation := 0
 var _wave_in_progress := false
 var _has_boss_fight := false
@@ -91,7 +94,7 @@ func _ready() -> void:
 
 	_boss_minion_timer = Timer.new()
 	_boss_minion_timer.name = "BossMinionTimer"
-	_boss_minion_timer.wait_time = 3.8
+	_boss_minion_timer.wait_time = 2.6
 	_boss_minion_timer.one_shot = false
 	_boss_minion_timer.timeout.connect(_on_boss_minion_timer_timeout)
 	add_child(_boss_minion_timer)
@@ -110,10 +113,12 @@ func start_waves() -> void:
 	_sniper_spawn_idx = 0
 	_wave_generation += 1
 	_pending_formation_spawns = 0
+	_pending_heli_drops = 0
+	_was_spawn_capped = false
 	_alive_enemies.clear()
 	_rewarded_enemies.clear()
 	_spawn_queue.clear()
-	_wave_delay_timer.start(0.8)
+	_wave_delay_timer.start(0.5)
 
 
 func get_current_wave_number() -> int:
@@ -122,6 +127,10 @@ func get_current_wave_number() -> int:
 
 func get_alive_enemy_count() -> int:
 	return _alive_enemies.size()
+
+
+func _get_active_and_pending_count() -> int:
+	return _alive_enemies.size() + _pending_formation_spawns + _pending_heli_drops
 
 
 func get_remaining_enemies_count() -> int:
@@ -302,14 +311,23 @@ func _spawn_next_from_queue() -> void:
 	if _spawn_queue.is_empty():
 		return
 
-	var unit_type: String = _spawn_queue.pop_front()
-	if unit_type == "wave_break":
+	var next_type: String = _spawn_queue[0]
+	if next_type == "wave_break":
+		_spawn_queue.pop_front()
 		current_subwave = mini(current_subwave + 1, total_subwaves)
 		subwave_changed.emit(current_subwave, total_subwaves)
 		if not _spawn_queue.is_empty() and _spawn_timer:
 			# Коротка пауза між хвилями всередині рівня
-			_spawn_timer.start(maxf(spawn_interval * 1.85, 2.5))
+			_spawn_timer.start(maxf(spawn_interval * 1.4, 1.35))
 		return
+
+	var needed_slots := 5 if next_type.begins_with("formation_") else 1
+	if max_concurrent_enemies > 0 and _get_active_and_pending_count() + needed_slots > max_concurrent_enemies:
+		_was_spawn_capped = true
+		return
+
+	_was_spawn_capped = false
+	var unit_type: String = _spawn_queue.pop_front()
 
 	if unit_type.begins_with("formation_"):
 		var parts := unit_type.split(":")
@@ -318,7 +336,7 @@ func _spawn_next_from_queue() -> void:
 		_spawn_five_formation(f_unit_type, is_v_shape)
 		if not _spawn_queue.is_empty() and _spawn_timer:
 			# Невелика пауза після виходу загону з 5 ворогів
-			_spawn_timer.start(spawn_interval * 1.65)
+			_spawn_timer.start(spawn_interval * 1.3)
 		return
 
 	if not _spawn_queue.is_empty() and _spawn_timer and not is_equal_approx(_spawn_timer.wait_time, spawn_interval):
@@ -510,18 +528,36 @@ func _spawn_helicopter() -> void:
 
 
 func _on_heli_trooper_drop(unit_type: String, from_pos: Vector2, land_pos: Vector2, heli: Node2D) -> void:
+	_spawn_heli_trooper_when_available(unit_type, from_pos, land_pos, heli, _wave_generation, false)
+
+
+func _spawn_heli_trooper_when_available(unit_type: String, from_pos: Vector2, land_pos: Vector2, heli: Node2D, gen: int, count_pending: bool) -> void:
+	if gen != _wave_generation or not is_inside_tree():
+		return
+	if count_pending:
+		_pending_heli_drops = maxi(_pending_heli_drops - 1, 0)
+
+	if max_concurrent_enemies > 0 and _get_active_and_pending_count() >= max_concurrent_enemies:
+		_pending_heli_drops += 1
+		var retry_t := get_tree().create_timer(0.25)
+		retry_t.timeout.connect(_spawn_heli_trooper_when_available.bind(unit_type, from_pos, land_pos, heli, gen, true))
+		return
+
 	var packed := _get_scene_for_type(unit_type)
 	if packed == null:
+		_check_wave_cleared()
 		return
 	var unit := packed.instantiate() as Node2D
 	if unit == null:
+		_check_wave_cleared()
 		return
-	unit.global_position = from_pos
+	var spawn_from: Vector2 = heli.get_rope_anchor() if (is_instance_valid(heli) and heli.has_method("get_rope_anchor")) else land_pos
+	unit.global_position = spawn_from
 	_register_unit(unit, unit_type)
 	var container := get_parent() if get_parent() != null else get_tree().current_scene
 	container.add_child(unit)
-	if unit.has_method("start_rappel"):
-		unit.start_rappel(heli, from_pos, land_pos)
+	if is_instance_valid(heli) and unit.has_method("start_rappel"):
+		unit.start_rappel(heli, spawn_from, land_pos)
 	else:
 		unit.global_position = land_pos
 
@@ -536,6 +572,10 @@ func _on_enemy_eliminated(instance_id: int, count_toward_level_total: bool = tru
 		_boss_fight_active = false
 		if _boss_minion_timer:
 			_boss_minion_timer.stop()
+	if _was_spawn_capped and _wave_in_progress and not _spawn_queue.is_empty() and _spawn_timer != null:
+		if max_concurrent_enemies <= 0 or _get_active_and_pending_count() < max_concurrent_enemies:
+			if _spawn_timer.is_stopped() or _spawn_timer.time_left > 0.20:
+				_spawn_timer.start(0.20)
 	_check_wave_cleared()
 
 
@@ -561,7 +601,7 @@ func _start_boss_fight() -> void:
 			container.add_child(boss)
 
 	if _boss_minion_timer:
-		_boss_minion_timer.start(3.6)
+		_boss_minion_timer.start(2.6)
 
 
 func _on_boss_minion_timer_timeout() -> void:
@@ -577,6 +617,11 @@ func _on_boss_minion_timer_timeout() -> void:
 		return
 
 	var available_slots := max_minions - alive_minions
+	if max_concurrent_enemies > 0:
+		var map_free_slots := maxi(max_concurrent_enemies - _get_active_and_pending_count(), 0)
+		available_slots = mini(available_slots, map_free_slots)
+	if available_slots <= 0:
+		return
 	var to_spawn := mini(randi_range(1, 2), available_slots)
 	var minion_types: Array[String] = ["infantry", "shotgun", "heavy", "grenadier", "axe", "sniper"]
 	var container := get_parent() if get_parent() != null else get_tree().current_scene
@@ -612,7 +657,7 @@ func _check_wave_cleared() -> void:
 		return
 	if not is_inside_tree() or _spawn_timer == null or not _spawn_timer.is_inside_tree():
 		return
-	if not _spawn_queue.is_empty() or not _alive_enemies.is_empty() or _pending_formation_spawns > 0:
+	if not _spawn_queue.is_empty() or not _alive_enemies.is_empty() or _pending_formation_spawns > 0 or _pending_heli_drops > 0:
 		return
 
 	if _has_boss_fight and not _boss_spawned:
