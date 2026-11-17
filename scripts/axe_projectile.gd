@@ -199,6 +199,13 @@ func _on_landed() -> void:
 		sfx.play()
 
 	_spawn_impact_burst(hit_player)
+	if is_inside_tree():
+		var env := get_tree().get_first_node_in_group("battlefield_environment")
+		if env != null:
+			if _is_boss_hammer and env.has_method("spawn_explosion_crater"):
+				env.spawn_explosion_crater(_hole_pos, 38.0, false)
+			elif env.has_method("trigger_shockwave"):
+				env.trigger_shockwave(_target_pos, 55.0, 0.18)
 
 
 func _build_hammer_crater_hole() -> void:

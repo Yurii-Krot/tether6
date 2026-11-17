@@ -71,22 +71,22 @@ const BASE_SPRITE_SCALE := Vector2(0.78, 0.78)
 const BODY_TEXTURE_OFFSET := Vector2(32.0, -40.0)
 const RIFLE_TEXTURE_OFFSET := Vector2(64.0, 0.0)
 const ARMOR_SHOULDER_STAND_OFFSETS: Array[Vector2] = [
-	Vector2(-25.3, -60.8), # Tier 1
-	Vector2(-23.2, -60.8), # Tier 2
-	Vector2(-23.2, -60.8), # Tier 3
-	Vector2(-25.3, -60.8), # Tier 4
-	Vector2(-23.2, -61.7), # Tier 5
-	Vector2(-21.9, -61.7), # Tier 6
-	Vector2(-23.2, -60.8), # Tier 7
+	Vector2(-25.0, -60.8), # Tier 1
+	Vector2(-25.0, -60.8), # Tier 2
+	Vector2(-25.0, -60.8), # Tier 3
+	Vector2(-25.0, -60.8), # Tier 4
+	Vector2(-25.0, -60.8), # Tier 5
+	Vector2(-25.0, -60.8), # Tier 6
+	Vector2(-25.0, -60.8), # Tier 7
 ]
 const ARMOR_SHOULDER_CROUCH_OFFSETS: Array[Vector2] = [
-	Vector2(-29.8, -38.8), # Tier 1
-	Vector2(-27.7, -38.9), # Tier 2
-	Vector2(-27.7, -38.9), # Tier 3
-	Vector2(-29.8, -38.8), # Tier 4
-	Vector2(-27.8, -39.8), # Tier 5
-	Vector2(-26.4, -39.8), # Tier 6
-	Vector2(-27.7, -38.9), # Tier 7
+	Vector2(-21.8, -7.8), # Tier 1
+	Vector2(-21.8, -7.8), # Tier 2
+	Vector2(-21.8, -7.8), # Tier 3
+	Vector2(-21.8, -7.8), # Tier 4
+	Vector2(-21.8, -7.8), # Tier 5
+	Vector2(-21.8, -7.8), # Tier 6
+	Vector2(-21.8, -7.8), # Tier 7
 ]
 const EJECT_LOCAL_POS := Vector2(45.0, -4.0)
 
@@ -401,9 +401,13 @@ func _update_weapon_aim(delta: float, mouse_pos: Vector2) -> void:
 	var clamped_aim := clampf(raw_angle, -0.78, 0.78)
 
 	if is_in_cover and _grenade_throw_timer <= 0.0 and _heal_anim_timer <= 0.0:
-		# У стані спокою в окопі гвинтівка нерухома внизу-вперед; рухається лише легко при активній перезарядці
-		var reload_angle := 0.22 + (sin(_anim_time * 9.0) * 0.05 if ammo < magazine_size else 0.0)
-		_current_aim_angle = lerp_angle(_current_aim_angle, reload_angle, minf(delta * 14.0, 1.0))
+		# У присяді на одному коліні: в спокої (та на початку/в кінці циклу) ствол опущений вниз (~15°),
+		# а під час активної перезарядки піднімається горизонтально до грудей (як у 5-кадровому референсі)
+		var crouch_col := int(_anim_time * 8.0) % ANIM_COLS if ammo < magazine_size else 0
+		var reload_angle := 0.26
+		if ammo < magazine_size and crouch_col >= 2 and crouch_col <= 9:
+			reload_angle = 0.02 + sin(_anim_time * 16.0) * 0.03
+		_current_aim_angle = lerp_angle(_current_aim_angle, reload_angle, minf(delta * 16.0, 1.0))
 		weapon_pivot.position = body.position + _shoulder_crouch_offset
 		weapon_pivot.rotation = _current_aim_angle
 		_set_weapon_frame(0)
@@ -441,14 +445,15 @@ func _update_sprite_frame_animation(delta: float) -> void:
 		land_squash = sin((_landing_squash_timer / 0.14) * PI)
 
 	if is_in_cover:
-		# Рядок 2 (кадр 0): спокійна стійка в укритті по центру плитки окопу без зайвого хитання
+		# Рядок 2: присяд на одному коліні в окопі (кадр 0 у спокої; кадри 0..11 під час перезарядки)
 		var reload_bob := sin(_anim_time * 9.0) * 0.6 if ammo < magazine_size else 0.0
 		body.position = Vector2(-1.5, 2.0 + reload_bob + land_squash * 4.0)
 		body.scale = Vector2(
 			BASE_SPRITE_SCALE.x * (1.0 + 0.09 * land_squash),
 			BASE_SPRITE_SCALE.y * (1.0 - 0.11 * land_squash)
 		)
-		body.frame_coords = Vector2i(0, ANIM_ROW_CROUCH)
+		var crouch_col := int(_anim_time * 8.0) % ANIM_COLS if ammo < magazine_size else 0
+		body.frame_coords = Vector2i(crouch_col, ANIM_ROW_CROUCH)
 		if shadow:
 			shadow.position = Vector2(-1.5, 58.0)
 			shadow.scale = Vector2(1.58 + 0.10 * land_squash, 1.32)
@@ -474,7 +479,8 @@ func _update_sprite_frame_animation(delta: float) -> void:
 		# Кадри 1..11 на листах зброї та рукавів — плавні фази пострілу, полум'я, газів та диму
 		_set_weapon_frame(clampi(1 + int(progress * float(ANIM_COLS - 1)), 1, ANIM_COLS - 1))
 	else:
-		body.frame_coords = Vector2i(0, ANIM_ROW_IDLE)
+		var idle_col := int(_anim_time * 7.0) % ANIM_COLS
+		body.frame_coords = Vector2i(idle_col, ANIM_ROW_IDLE)
 		_set_weapon_frame(0)
 
 
@@ -920,6 +926,11 @@ func _trigger_shot_feedback() -> void:
 	_recoil_offset = recoil_distance
 	_recoil_angle = randf_range(-0.055, -0.015)
 	barrel.position.x = -_recoil_offset
+
+	if is_inside_tree() and muzzle != null:
+		var env := get_tree().get_first_node_in_group("battlefield_environment")
+		if env != null and env.has_method("trigger_light_pulse"):
+			env.trigger_light_pulse(muzzle.global_position, Color(1.0, 0.82, 0.34, 0.42), 115.0, 0.09)
 
 	_spawn_shell_casing()
 

@@ -156,8 +156,11 @@ var _death_anim_duration := 0.48
 var _blood_splashed := false
 var _boot_slapped := false
 var _using_custom_death_sheet := false
+var _raw_sprite_scale := Vector2(0.62, 0.62)
+var _raw_shadow_scale := Vector2.ONE
 var _base_sprite_scale := Vector2(0.62, 0.62)
 var _base_shadow_scale := Vector2.ONE
+var _depth_tint_color := Color.WHITE
 var _last_step_col := -1
 var _burst_shots_remaining := 0
 var _burst_timer := 0.0
@@ -204,9 +207,12 @@ func _ready() -> void:
 	_anim_time = randf_range(0.0, 10.0)
 
 	if body_sprite:
+		_raw_sprite_scale = body_sprite.scale
 		_base_sprite_scale = body_sprite.scale
 	if shadow:
+		_raw_shadow_scale = shadow.scale
 		_base_shadow_scale = shadow.scale
+	_apply_depth_perspective(global_position.y)
 	if use_sniper_laser:
 		_shoot_anim_duration = 0.42
 		if is_equal_approx(projectile_speed, 540.0):
@@ -238,6 +244,25 @@ func _ready() -> void:
 func set_custom_stop_x(custom_x: float) -> void:
 	_has_custom_stop_x = true
 	_stop_x = custom_x
+
+
+func _apply_depth_perspective(ref_y: float) -> void:
+	if use_sniper_laser or ref_y < 300.0:
+		_depth_tint_color = Color(0.92, 0.91, 0.94, 1.0)
+		_base_sprite_scale = _raw_sprite_scale * 0.94
+		_base_shadow_scale = _raw_shadow_scale * 0.94
+	else:
+		var depth_t := clampf((ref_y - 355.0) / (595.0 - 355.0), 0.0, 1.0)
+		var persp_mult := lerpf(0.96, 1.03, depth_t) if is_boss else lerpf(0.91, 1.07, depth_t)
+		_base_sprite_scale = _raw_sprite_scale * persp_mult
+		_base_shadow_scale = _raw_shadow_scale * persp_mult
+		_depth_tint_color = Color(0.90, 0.89, 0.92, 1.0).lerp(Color.WHITE, depth_t)
+	if body_sprite and state != State.DEAD:
+		body_sprite.scale = _base_sprite_scale
+		if _hit_flash_timer <= 0.0:
+			body_sprite.modulate = _depth_tint_color
+	if shadow and state != State.DEAD:
+		shadow.scale = _base_shadow_scale
 
 
 func _physics_process(delta: float) -> void:
@@ -332,9 +357,10 @@ func _process_rappel(delta: float) -> void:
 func _finish_rappel() -> void:
 	_rappel_active = false
 	global_position = _rappel_to
+	_apply_depth_perspective(_rappel_to.y)
 	if shadow:
 		shadow.position = _shadow_base_pos
-		shadow.scale = Vector2.ONE
+		shadow.scale = _base_shadow_scale
 	if body_sprite:
 		body_sprite.rotation = 0.0
 		# Присідання при приземленні
@@ -788,6 +814,12 @@ func _perform_attack(muzzle_pos: Vector2) -> void:
 		shot_sound.pitch_scale = randf_range(0.76, 0.84) if use_trench_tile_launcher else (randf_range(0.96, 1.04) if not use_sniper_laser else randf_range(0.98, 1.02))
 		shot_sound.play()
 
+	if not use_axe_throw and is_inside_tree():
+		var env := get_tree().get_first_node_in_group("battlefield_environment")
+		if env != null and env.has_method("trigger_light_pulse"):
+			var flash_col := Color(1.0, 0.35, 0.25, 0.38) if (use_sniper_laser or use_red_bullet or use_trench_tile_launcher) else Color(0.38, 0.82, 1.0, 0.30)
+			env.trigger_light_pulse(muzzle_pos, flash_col, 90.0, 0.08)
+
 	if use_axe_throw:
 		# Випускаємо сокиру точно у момент хлиста вперед (кадр 6 з 12, ≈ 45% анімації)
 		_pending_axe_throw = true
@@ -1230,9 +1262,9 @@ func _update_hit_flash(delta: float) -> void:
 			body_sprite.modulate = Color(2.35, 0.28, 0.28, 1.0)
 		elif _hit_flash_timer > 0.0:
 			var t := _hit_flash_timer / 0.028
-			body_sprite.modulate = Color.WHITE.lerp(Color(2.35, 0.28, 0.28, 1.0), t)
+			body_sprite.modulate = _depth_tint_color.lerp(Color(2.35, 0.28, 0.28, 1.0), t)
 		else:
-			body_sprite.modulate = Color.WHITE
+			body_sprite.modulate = _depth_tint_color
 	elif body_rect:
 		if _hit_flash_timer <= 0.0:
 			body_rect.color = _base_color

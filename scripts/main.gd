@@ -1,6 +1,7 @@
 extends Node2D
 
 const GAME_STATE := preload("res://scripts/game_state.gd")
+const BATTLEFIELD_ENV_SCRIPT := preload("res://scripts/battlefield_environment.gd")
 const PAUSE_MENU_SCRIPT := preload("res://scripts/pause_menu.gd")
 const TRANSMISSION_DIALOG_SCRIPT := preload("res://scripts/transmission_dialog.gd")
 const BATTLE_END_DIALOG_SCRIPT := preload("res://scripts/battle_end_dialog.gd")
@@ -23,6 +24,7 @@ var _pause_menu: PauseMenu = null
 var _pause_hud_btn: Button = null
 var _intro_dialog: TransmissionDialog = null
 var _battle_end_dialog: BattleEndDialog = null
+var _battlefield_env: BattlefieldEnvironment = null
 
 # Смужка прогресу рівня з повзунком справа зверху
 var _progress_panel: ColorRect = null
@@ -42,6 +44,7 @@ func _ready() -> void:
 	_level_earned = 0
 	GAME_STATE.apply_audio_settings()
 	GAME_STATE.stop_menu_bgm(get_tree(), 0.0)
+	_setup_battlefield_environment()
 	_start_battle_bgm()
 	_create_top_right_progress_bar()
 	_create_pause_hud_button()
@@ -71,6 +74,14 @@ func _ready() -> void:
 	if GAME_STATE.current_level == 1:
 		wave_manager.auto_start = false
 		_show_level_1_intro_dialog()
+
+
+func _setup_battlefield_environment() -> void:
+	if _battlefield_env != null and is_instance_valid(_battlefield_env):
+		return
+	_battlefield_env = BATTLEFIELD_ENV_SCRIPT.new() as BattlefieldEnvironment
+	_battlefield_env.name = "BattlefieldEnvironment"
+	add_child(_battlefield_env)
 
 
 func _process(delta: float) -> void:

@@ -187,6 +187,11 @@ func _spawn_scorch_mark(impact_pos: Vector2) -> void:
 	if parent_node == null:
 		return
 
+	if is_inside_tree():
+		var env := get_tree().get_first_node_in_group("battlefield_environment")
+		if env != null and env.has_method("spawn_explosion_crater"):
+			env.spawn_explosion_crater(impact_pos, 64.0, true)
+
 	var crater := Polygon2D.new()
 	crater.color = Color(0.12, 0.10, 0.08, 0.55)
 	crater.z_index = -2

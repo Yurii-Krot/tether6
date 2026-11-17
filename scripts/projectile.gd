@@ -188,6 +188,14 @@ func _spawn_impact_sparks(impact_pos: Vector2, hit_character: bool) -> void:
 		BulletType.SNIPER_RED:
 			spark_color = Color(1.0, 0.22, 0.22, 0.98)
 
+	if is_inside_tree():
+		var env := get_tree().get_first_node_in_group("battlefield_environment")
+		if env != null:
+			if not hit_character and env.has_method("spawn_bullet_ground_impact"):
+				env.spawn_bullet_ground_impact(impact_pos, spark_color)
+			elif env.has_method("trigger_light_pulse"):
+				env.trigger_light_pulse(impact_pos, spark_color, 52.0, 0.09)
+
 	var count := 5 if bullet_type == BulletType.SNIPER_RED else 4
 	for i in range(count):
 		var spark := Polygon2D.new()

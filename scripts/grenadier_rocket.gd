@@ -174,6 +174,11 @@ func _spawn_explosion_visual() -> void:
 	if parent_node == null:
 		return
 
+	if is_inside_tree():
+		var env := get_tree().get_first_node_in_group("battlefield_environment")
+		if env != null and env.has_method("spawn_explosion_crater"):
+			env.spawn_explosion_crater(target_pos + Vector2(0.0, 14.0), 42.0, false)
+
 	var sfx := AudioStreamPlayer.new()
 	sfx.stream = EXPLOSION_SOUND
 	sfx.volume_db = -1.5
