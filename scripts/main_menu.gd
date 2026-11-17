@@ -10,6 +10,7 @@ var _transitioning := false
 var _hover_tween: Tween = null
 var _settings_hover_tween: Tween = null
 var _settings_popup: PauseMenu = null
+var _test_boss5_btn: Button = null
 var _test_boss_btn: Button = null
 var _test_lvl10_btn: Button = null
 
@@ -97,17 +98,24 @@ func _on_play_button_up() -> void:
 	_hover_tween.tween_property(play_button, "scale", Vector2(1.04, 1.04), 0.09).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
+func _disable_action_buttons() -> void:
+	if play_button:
+		play_button.disabled = true
+	if _test_boss5_btn:
+		_test_boss5_btn.disabled = true
+	if _test_boss_btn:
+		_test_boss_btn.disabled = true
+	if _test_lvl10_btn:
+		_test_lvl10_btn.disabled = true
+
+
 func _on_play_pressed() -> void:
 	if _transitioning:
 		return
 	_transitioning = true
 	GAME_STATE.test_skip_to_boss = false
-	if play_button:
-		play_button.disabled = true
-	if _test_boss_btn:
-		_test_boss_btn.disabled = true
-	if _test_lvl10_btn:
-		_test_lvl10_btn.disabled = true
+	GAME_STATE.test_boss_only_mode = false
+	_disable_action_buttons()
 	_fade_to_scene(_start_game_scene)
 
 
@@ -118,36 +126,40 @@ func _create_test_level_buttons() -> void:
 	box.offset_left = -286.0
 	box.offset_top = 24.0
 	box.offset_right = -24.0
-	box.offset_bottom = 128.0
+	box.offset_bottom = 176.0
 	box.add_theme_constant_override("separation", 8)
 	add_child(box)
 	if fade_overlay:
 		move_child(box, fade_overlay.get_index())
 
+	_test_boss5_btn = GAME_STATE.create_test_button("ТЕСТ: БОС 5 ХВИЛІ", Color(0.42, 0.22, 0.14, 0.94))
+	_test_boss5_btn.custom_minimum_size = Vector2(262.0, 44.0)
+	_test_boss5_btn.pressed.connect(_on_test_level_pressed.bind(5, true))
+	box.add_child(_test_boss5_btn)
+
 	_test_boss_btn = GAME_STATE.create_test_button("ТЕСТ: БОС 10 РІВНЯ", Color(0.46, 0.16, 0.14, 0.94))
 	_test_boss_btn.custom_minimum_size = Vector2(262.0, 44.0)
-	_test_boss_btn.pressed.connect(_on_test_level_10_pressed.bind(true))
+	_test_boss_btn.pressed.connect(_on_test_level_pressed.bind(10, true))
 	box.add_child(_test_boss_btn)
 
 	_test_lvl10_btn = GAME_STATE.create_test_button("ТЕСТ: 10 РІВЕНЬ (ХВИЛЯ)", Color(0.20, 0.25, 0.17, 0.94))
 	_test_lvl10_btn.custom_minimum_size = Vector2(262.0, 44.0)
-	_test_lvl10_btn.pressed.connect(_on_test_level_10_pressed.bind(false))
+	_test_lvl10_btn.pressed.connect(_on_test_level_pressed.bind(10, false))
 	box.add_child(_test_lvl10_btn)
 
 
-func _on_test_level_10_pressed(skip_to_boss: bool) -> void:
+func _on_test_level_pressed(level: int, skip_to_boss: bool) -> void:
 	if _transitioning:
 		return
 	_transitioning = true
-	if play_button:
-		play_button.disabled = true
-	if _test_boss_btn:
-		_test_boss_btn.disabled = true
-	if _test_lvl10_btn:
-		_test_lvl10_btn.disabled = true
-	GAME_STATE.jump_to_test_level_10(skip_to_boss)
+	_disable_action_buttons()
+	GAME_STATE.jump_to_test_level(level, skip_to_boss)
 	GAME_STATE.stop_menu_bgm(get_tree(), 0.42)
 	_fade_to_scene(_start_test_battle_scene)
+
+
+func _on_test_level_10_pressed(skip_to_boss: bool) -> void:
+	_on_test_level_pressed(10, skip_to_boss)
 
 
 func _fade_to_scene(on_done: Callable) -> void:

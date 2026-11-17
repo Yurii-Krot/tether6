@@ -267,7 +267,7 @@ func _update_progress_bar(delta: float) -> void:
 
 func _update_hud() -> void:
 	if wave_label:
-		wave_label.text = "Рівень: %d / %d   |   Монети: $%d" % [GAME_STATE.current_level, GAME_STATE.TOTAL_LEVELS, GAME_STATE.coins]
+		wave_label.text = "Рівень: %d / %d   Монети: $%d" % [GAME_STATE.current_level, GAME_STATE.TOTAL_LEVELS, GAME_STATE.coins]
 
 
 func _on_wave_started(_wave_number: int) -> void:

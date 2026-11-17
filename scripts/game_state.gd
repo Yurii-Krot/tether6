@@ -229,14 +229,24 @@ static func reset_campaign() -> void:
 	test_boss_only_mode = false
 
 
-static func jump_to_test_level_10(skip_to_boss: bool = false) -> void:
-	current_level = 10
+static func jump_to_test_level(level: int, skip_to_boss: bool = false) -> void:
+	current_level = clampi(level, 1, TOTAL_LEVELS)
 	test_skip_to_boss = skip_to_boss
 	test_boss_only_mode = skip_to_boss
 	if get_upgrade_level("hp") == 0 and get_upgrade_level("damage") == 0:
-		_set_upgrade_level("hp", 3)
-		_set_upgrade_level("damage", 3)
-		coins = maxi(coins, 500)
+		var tier := 2 if current_level <= 5 else 3
+		var min_coins := 250 if current_level <= 5 else 500
+		_set_upgrade_level("hp", tier)
+		_set_upgrade_level("damage", tier)
+		coins = maxi(coins, min_coins)
+
+
+static func jump_to_test_level_5(skip_to_boss: bool = true) -> void:
+	jump_to_test_level(5, skip_to_boss)
+
+
+static func jump_to_test_level_10(skip_to_boss: bool = false) -> void:
+	jump_to_test_level(10, skip_to_boss)
 
 
 static func create_test_button(text_label: String, base_col: Color) -> Button:

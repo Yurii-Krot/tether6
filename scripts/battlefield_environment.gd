@@ -396,16 +396,7 @@ func _draw_terrain_layer() -> void:
 
 
 func _draw_ground_volume_shading() -> void:
-	# 1. Глибинний градієнт поля бою: легке затемнення вздовж дальнього краю біля валу
-	var far_ground_shade := PackedVector2Array([
-		Vector2(260.0, 295.0),
-		Vector2(1280.0, 315.0),
-		Vector2(1280.0, 415.0),
-		Vector2(260.0, 395.0),
-	])
-	_terrain_layer.draw_colored_polygon(far_ground_shade, Color(0.05, 0.04, 0.03, 0.20))
-
-	# 2. Розсип стріляних латунних гільз біля бруствера окопу (x = 262..325, y = 370..625)
+	# Розсип стріляних латунних гільз біля бруствера окопу (x = 262..325, y = 370..625)
 	var brass_spots: Array[Vector2] = [
 		Vector2(272.0, 388.0), Vector2(284.0, 396.0), Vector2(268.0, 412.0),
 		Vector2(278.0, 468.0), Vector2(291.0, 482.0), Vector2(270.0, 498.0),
@@ -479,19 +470,6 @@ func _draw_trench_interior_depth() -> void:
 
 
 func _draw_embankment_depth_and_grass() -> void:
-	# М'яка об'ємна тінь вздовж верхнього валу (відділяє пагорб снайперів від основного поля бою)
-	var ridge_shadow := PackedVector2Array([
-		Vector2(265.0, 292.0),
-		Vector2(680.0, 286.0),
-		Vector2(920.0, 344.0),
-		Vector2(1280.0, 355.0),
-		Vector2(1280.0, 392.0),
-		Vector2(900.0, 376.0),
-		Vector2(665.0, 318.0),
-		Vector2(265.0, 326.0),
-	])
-	_terrain_layer.draw_colored_polygon(ridge_shadow, Color(0.06, 0.05, 0.03, 0.24))
-
 	# Анімовані пучки трави вздовж валу, що колишуться від вітру та потоку повітря з вертольота
 	for gc in _grass_clusters:
 		var cpos: Vector2 = gc["pos"]
@@ -619,14 +597,6 @@ func _draw_foreground_layer() -> void:
 
 
 func _draw_foreground_barbed_wire() -> void:
-	var bottom_shelf := PackedVector2Array([
-		Vector2(0.0, 686.0),
-		Vector2(1280.0, 678.0),
-		Vector2(1280.0, 735.0),
-		Vector2(0.0, 735.0),
-	])
-	_foreground_layer.draw_colored_polygon(bottom_shelf, Color(0.04, 0.03, 0.025, 0.42))
-
 	var stakes: Array[Array] = [
 		[Vector2(936.0, 725.0), Vector2(964.0, 628.0), 7.5],
 		[Vector2(996.0, 725.0), Vector2(944.0, 646.0), 6.5],
